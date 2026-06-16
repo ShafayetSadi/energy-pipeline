@@ -1,0 +1,64 @@
+{
+  "uid": "system-observability",
+  "title": "System Observability",
+  "tags": ["energy", "observability"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Messages received per minute",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), metric_value FROM system_metrics WHERE metric_name='counter.messages.received' AND time > now() - interval '30 minutes' ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Validation failures per minute",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), metric_value FROM system_metrics WHERE metric_name='counter.validation.failures' AND time > now() - interval '30 minutes' ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Telemetry p95 latency (ms)",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), metric_value FROM system_metrics WHERE metric_name='latency.telemetry.p95_ms' AND time > now() - interval '30 minutes' ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Readings stored per minute",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), metric_value FROM system_metrics WHERE metric_name='counter.readings.stored' AND time > now() - interval '30 minutes' ORDER BY 1"
+        }
+      ]
+    }
+  ]
+}

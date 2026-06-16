@@ -1,43 +1,117 @@
 services:
-  postgres:
-    image: postgres:16
-    container_name: wattflow-postgres
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: wattflow-mosquitto
+    restart: unless-stopped
+    ports:
+      - "18831:1883"
+    volumes:
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+      - ./config/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mosquitto_pub",
+          "-h",
+          "localhost",
+          "-p",
+          "1883",
+          "-t",
+          "healthz",
+          "-m",
+          "ok",
+          "-q",
+          "1",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  timescaledb:
+    image: timescale/timescaledb:2.16.1-pg16
+    container_name: wattflow-timescaledb
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: wattflow
+      POSTGRES_USER: energy
+      POSTGRES_PASSWORD: energy
+      POSTGRES_DB: energy_monitoring
     ports:
-      - "5433:5432"
+      - "54329:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - timescale-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d wattflow"]
+      test: ["CMD-SHELL", "pg_isready -U energy -d energy_monitoring"]
       interval: 5s
       timeout: 3s
       retries: 20
 
-  backend:
+  edge-gateway:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
-    container_name: wattflow-backend
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: wattflow-edge-gateway
     restart: unless-stopped
     depends_on:
-      postgres:
+      mosquitto:
+        condition: service_started
+      timescaledb:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/wattflow
-      DB_POOL_SIZE: 50
-      DB_MAX_OVERFLOW: 100
-      DB_POOL_TIMEOUT: 30
-      DB_POOL_RECYCLE: 1800
-      DB_ECHO: "false"
-      REQUEST_METRICS_CSV_PATH: /app/runtime/request_metrics.csv
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      DATABASE_URL: postgresql+asyncpg://energy:energy@timescaledb:5432/energy_monitoring
     ports:
       - "8001:8000"
     volumes:
-      - ./runtime:/app/runtime
+      - ./gateway/config:/app/config:ro
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: wattflow-grafana
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  simulator:
+    build:
+      context: .
+      dockerfile: simulator/Dockerfile
+    container_name: wattflow-simulator
+    restart: "no"
+    depends_on:
+      mosquitto:
+        condition: service_started
+    environment:
+      PYTHONUNBUFFERED: "1"
+    profiles: ["loadtest"]
+    volumes:
+      - ./simulator/scenarios:/app/scenarios:ro
+    command:
+      [
+        "python",
+        "mqtt_publisher.py",
+        "--scenario-file",
+        "/app/scenarios/high_throughput.yaml",
+      ]
 
 volumes:
-  pgdata:
+  mosquitto-data:
+  mosquitto-log:
+  timescale-data:
+  grafana-data:

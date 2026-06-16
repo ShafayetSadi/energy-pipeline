@@ -1,0 +1,16 @@
+scenario_name: undervoltage_test
+num_devices: 5
+duration_seconds: 180
+publish_interval_seconds: 2
+anomalies:
+  - device_id: house_0001
+    start_after_seconds: 20
+    duration_seconds: 60
+    type: undervoltage
+    voltage_v: 180
+  - device_id: house_0002
+    start_after_seconds: 100
+    duration_seconds: 30
+    type: overvoltage
+    voltage_v: 260
+invalid_payload_ratio: 0.0

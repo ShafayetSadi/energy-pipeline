@@ -1,0 +1,6 @@
+scenario_name: invalid_payloads
+num_devices: 4
+duration_seconds: 120
+publish_interval_seconds: 1
+anomalies: []
+invalid_payload_ratio: 0.30

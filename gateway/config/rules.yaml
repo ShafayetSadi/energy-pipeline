@@ -1,0 +1,60 @@
+rules:
+  undervoltage:
+    enabled: true
+    event_type: UNDER_VOLTAGE
+    severity: WARNING
+    condition:
+      type: threshold
+      field: voltage_v
+      operator: lt
+      value: 200
+
+  overvoltage:
+    enabled: true
+    event_type: OVER_VOLTAGE
+    severity: WARNING
+    condition:
+      type: threshold
+      field: voltage_v
+      operator: gt
+      value: 250
+
+  overload:
+    enabled: true
+    event_type: OVERLOAD
+    severity: CRITICAL
+    condition:
+      type: threshold
+      field: current_a
+      operator: gt
+      value: 10
+
+  power_spike:
+    enabled: true
+    event_type: POWER_SPIKE
+    severity: WARNING
+    condition:
+      type: percentage_increase
+      field: power_w
+      percent: 30
+      window_seconds: 60
+
+  voltage_anomaly_low:
+    enabled: true
+    event_type: VOLTAGE_ANOMALY
+    severity: INFO
+    condition:
+      type: threshold
+      field: voltage_v
+      operator: lt
+      value: 210
+
+  over_temperature:
+    enabled: true
+    event_type: OVER_TEMPERATURE
+    severity: WARNING
+    condition:
+      type: threshold
+      field: temperature_c
+      operator: gt
+      value: 60

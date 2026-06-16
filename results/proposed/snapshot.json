@@ -1,0 +1,32 @@
+{
+  "captured_at": "2026-06-16T09:31:15.259188+00:00",
+  "base_url": "http://localhost:8000",
+  "summary": {
+    "uptime_seconds": 176.91916657900038,
+    "counters": {
+      "messages.received": 74,
+      "validation.telemetry.success": 74,
+      "messages.telemetry": 74,
+      "readings.stored": 74,
+      "events.warning": 5,
+      "events.type.power_spike": 5
+    },
+    "latencies": {
+      "telemetry": {
+        "count": 74.0,
+        "avg_ms": 12.126267432462113,
+        "p50_ms": 9.633607000068878,
+        "p95_ms": 23.670431999562425,
+        "p99_ms": 84.67950500016741
+      }
+    }
+  },
+  "events_by_severity": {
+    "CRITICAL": 46,
+    "WARNING": 332,
+    "INFO": 30
+  },
+  "quality_by_type": {
+    "invalid_json": 151
+  }
+}

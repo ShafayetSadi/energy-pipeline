@@ -1,0 +1,76 @@
+{
+  "uid": "device-detail",
+  "title": "Device Detail",
+  "tags": ["energy", "device"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "name": "device_id",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+        "query": "SELECT DISTINCT device_id FROM energy_readings ORDER BY 1",
+        "refresh": 2,
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Voltage (V)",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), voltage_v FROM energy_readings WHERE device_id = '$device_id' AND time > now() - interval '1 hour' ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Current (A)",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), current_a FROM energy_readings WHERE device_id = '$device_id' AND time > now() - interval '1 hour' ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Power (W)",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), power_w FROM energy_readings WHERE device_id = '$device_id' AND time > now() - interval '1 hour' ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Temperature (C)",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), temperature_c FROM energy_readings WHERE device_id = '$device_id' AND time > now() - interval '1 hour' ORDER BY 1"
+        }
+      ]
+    }
+  ]
+}

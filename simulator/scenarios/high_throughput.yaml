@@ -1,0 +1,11 @@
+scenario_name: high_throughput
+num_devices: 200
+duration_seconds: 120
+publish_interval_seconds: 1
+anomalies:
+  - device_id: house_0050
+    start_after_seconds: 60
+    duration_seconds: 20
+    type: overload
+    current_a: 15.0
+invalid_payload_ratio: 0.02

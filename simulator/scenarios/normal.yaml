@@ -1,0 +1,7 @@
+scenario_name: normal
+num_devices: 5
+duration_seconds: 120
+publish_interval_seconds: 2
+anomalies: []
+invalid_payload_ratio: 0.0
+base_voltage: 220.0

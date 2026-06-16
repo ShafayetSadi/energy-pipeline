@@ -1,8 +1,7 @@
 [project]
-name = "energy-pipeline"
+name = "edge-gateway"
 version = "0.1.0"
-description = "Event-driven edge gateway for IoT-based smart energy monitoring"
-readme = "README.md"
+description = "Event-driven edge gateway for IoT smart energy monitoring"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
@@ -23,12 +22,11 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "ruff>=0.6.0",
-    "mypy>=1.11.0",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["gateway/tests"]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
@@ -37,7 +35,3 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC"]
 ignore = ["E501", "B008"]
-
-[tool.mypy]
-python_version = "3.12"
-ignore_missing_imports = true
