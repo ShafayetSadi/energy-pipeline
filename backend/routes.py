@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import time
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import insert, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,8 +28,14 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> HealthResponse:
 
 
 @router.post("/data", response_model=IngestResponse, status_code=status.HTTP_202_ACCEPTED)
-async def ingest_data(payload: EnergyDataIn, db: AsyncSession = Depends(get_db)) -> IngestResponse:
+async def ingest_data(
+    payload: EnergyDataIn,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> IngestResponse:
+    handler_started_at = time.perf_counter()
     try:
+        execute_started_at = time.perf_counter()
         await db.execute(
             insert(EnergyData).values(
                 house_id=payload.house_id,
@@ -38,17 +45,39 @@ async def ingest_data(payload: EnergyDataIn, db: AsyncSession = Depends(get_db))
                 timestamp=payload.timestamp,
             )
         )
+        request.state.db_execute_ms = (
+            time.perf_counter() - execute_started_at
+        ) * 1000.0
+
+        commit_started_at = time.perf_counter()
         await db.commit()
+        request.state.db_commit_ms = (
+            time.perf_counter() - commit_started_at
+        ) * 1000.0
+        request.state.total_handler_ms = (
+            time.perf_counter() - handler_started_at
+        ) * 1000.0
         return IngestResponse(status="accepted")
     except SQLAlchemyError as exc:
         await db.rollback()
+        request.state.total_handler_ms = (
+            time.perf_counter() - handler_started_at
+        ) * 1000.0
         logger.exception("Failed to persist data for house_id=%s", payload.house_id)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="database write failed") from exc
 
 
 @router.post("/data/batch", response_model=IngestResponse, status_code=status.HTTP_202_ACCEPTED)
-async def ingest_data_batch(payload: EnergyDataBatchIn, db: AsyncSession = Depends(get_db)) -> IngestResponse:
+async def ingest_data_batch(
+    payload: EnergyDataBatchIn,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> IngestResponse:
+    handler_started_at = time.perf_counter()
     if not payload.items:
+        request.state.total_handler_ms = (
+            time.perf_counter() - handler_started_at
+        ) * 1000.0
         return IngestResponse(status="accepted:0")
 
     rows = [
@@ -63,10 +92,25 @@ async def ingest_data_batch(payload: EnergyDataBatchIn, db: AsyncSession = Depen
     ]
 
     try:
+        execute_started_at = time.perf_counter()
         await db.execute(insert(EnergyData), rows)
+        request.state.db_execute_ms = (
+            time.perf_counter() - execute_started_at
+        ) * 1000.0
+
+        commit_started_at = time.perf_counter()
         await db.commit()
+        request.state.db_commit_ms = (
+            time.perf_counter() - commit_started_at
+        ) * 1000.0
+        request.state.total_handler_ms = (
+            time.perf_counter() - handler_started_at
+        ) * 1000.0
         return IngestResponse(status=f"accepted:{len(rows)}")
     except SQLAlchemyError as exc:
         await db.rollback()
+        request.state.total_handler_ms = (
+            time.perf_counter() - handler_started_at
+        ) * 1000.0
         logger.exception("Failed batch write (%d rows)", len(rows))
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="database write failed") from exc

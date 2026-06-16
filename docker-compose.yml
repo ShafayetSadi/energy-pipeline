@@ -33,8 +33,11 @@ services:
       DB_POOL_TIMEOUT: 30
       DB_POOL_RECYCLE: 1800
       DB_ECHO: "false"
+      REQUEST_METRICS_CSV_PATH: /app/runtime/request_metrics.csv
     ports:
       - "8001:8000"
+    volumes:
+      - ./runtime:/app/runtime
 
 volumes:
   pgdata:

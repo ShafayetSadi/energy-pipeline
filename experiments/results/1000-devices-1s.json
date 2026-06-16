@@ -1,0 +1,17 @@
+{
+  "devices": 1000,
+  "interval_s": 1.0,
+  "duration_s": 122.26643720200082,
+  "max_inflight": 1000,
+  "api_url": "http://localhost:8001/data",
+  "total_requests": 17389,
+  "successful_requests": 15776,
+  "failed_requests": 1613,
+  "failure_rate": 0.09275979067226407,
+  "requests_per_second": 142.22218621837325,
+  "avg_latency_ms": 5186.994298224468,
+  "p50_latency_ms": 5973.533072999999,
+  "p95_latency_ms": 10371.289734999664,
+  "p99_latency_ms": 15170.799265000824,
+  "max_latency_ms": 31637.555098999655
+}

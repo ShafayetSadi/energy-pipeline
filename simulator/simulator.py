@@ -9,10 +9,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import json
 import signal
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from random import Random
 
 import httpx
@@ -23,14 +25,36 @@ class Metrics:
     total_sent: int = 0
     total_success: int = 0
     total_failed: int = 0
+    total_latency_ms: float = 0.0
+    success_latencies_ms: list[float] | None = None
 
-    def record_success(self) -> None:
+    def __post_init__(self) -> None:
+        if self.success_latencies_ms is None:
+            self.success_latencies_ms: list = []
+
+    def record_success(self, latency_ms: float) -> None:
         self.total_sent += 1
         self.total_success += 1
+        self.total_latency_ms += latency_ms
+        assert self.success_latencies_ms is not None
+        self.success_latencies_ms.append(latency_ms)
 
     def record_failure(self) -> None:
         self.total_sent += 1
         self.total_failed += 1
+
+    @property
+    def avg_latency_ms(self) -> float:
+        if self.total_success == 0:
+            return 0.0
+        return self.total_latency_ms / self.total_success
+
+    def percentile_latency_ms(self, percentile: float) -> float:
+        if not self.success_latencies_ms:
+            return 0.0
+        ordered = sorted(self.success_latencies_ms)
+        index = int((len(ordered) - 1) * percentile)
+        return ordered[index]
 
 
 def usage_band(hour: int) -> tuple[float, float]:
@@ -94,6 +118,7 @@ async def device_worker(
         payload = generate_energy_data(house_id, rng, device_scale)
 
         try:
+            started_at = time.perf_counter()
             if semaphore is not None:
                 async with semaphore:
                     resp = await client.post(api_url, json=payload, timeout=timeout_s)
@@ -101,7 +126,8 @@ async def device_worker(
                 resp = await client.post(api_url, json=payload, timeout=timeout_s)
 
             resp.raise_for_status()
-            metrics.record_success()
+            latency_ms = (time.perf_counter() - started_at) * 1000.0
+            metrics.record_success(latency_ms)
         except Exception:
             # Keep simulation running despite intermittent failures.
             metrics.record_failure()
@@ -136,7 +162,8 @@ async def metrics_logger(
 
         print(
             f"[metrics] total={current_total} success={metrics.total_success} "
-            f"failed={metrics.total_failed} rps={rps:.2f}"
+            f"failed={metrics.total_failed} rps={rps:.2f} "
+            f"avg_latency_ms={metrics.avg_latency_ms:.2f}"
         )
 
         last_total = current_total
@@ -147,9 +174,41 @@ def make_house_id(index: int) -> str:
     return f"H{index:04d}"
 
 
+def write_summary(args: argparse.Namespace, metrics: Metrics, elapsed_s: float) -> None:
+    if not args.summary_json:
+        return
+
+    summary_path = Path(args.summary_json)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+
+    steady_rps = metrics.total_sent / elapsed_s if elapsed_s > 0 else 0.0
+    summary = {
+        "devices": args.devices,
+        "interval_s": args.interval,
+        "duration_s": elapsed_s,
+        "max_inflight": args.max_inflight,
+        "api_url": args.api_url,
+        "total_requests": metrics.total_sent,
+        "successful_requests": metrics.total_success,
+        "failed_requests": metrics.total_failed,
+        "failure_rate": (
+            metrics.total_failed / metrics.total_sent if metrics.total_sent else 0.0
+        ),
+        "requests_per_second": steady_rps,
+        "avg_latency_ms": metrics.avg_latency_ms,
+        "p50_latency_ms": metrics.percentile_latency_ms(0.50),
+        "p95_latency_ms": metrics.percentile_latency_ms(0.95),
+        "p99_latency_ms": metrics.percentile_latency_ms(0.99),
+        "max_latency_ms": max(metrics.success_latencies_ms or [0.0]),
+    }
+
+    summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+
+
 async def run_simulation(args: argparse.Namespace) -> None:
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
+    started_at = time.monotonic()
 
     def _shutdown() -> None:
         stop_event.set()
@@ -202,6 +261,14 @@ async def run_simulation(args: argparse.Namespace) -> None:
             )
         )
 
+        if args.duration and args.duration > 0:
+
+            async def stop_after_duration() -> None:
+                await asyncio.sleep(args.duration)
+                stop_event.set()
+
+            workers.append(asyncio.create_task(stop_after_duration()))
+
         print(
             f"Starting simulator: devices={args.devices}, interval={args.interval}s, "
             f"max_inflight={args.max_inflight}, url={args.api_url}"
@@ -221,8 +288,10 @@ async def run_simulation(args: argparse.Namespace) -> None:
 
     print(
         f"Final metrics: total={metrics.total_sent}, success={metrics.total_success}, "
-        f"failed={metrics.total_failed}"
+        f"failed={metrics.total_failed}, avg_latency_ms={metrics.avg_latency_ms:.2f}, "
+        f"p95_latency_ms={metrics.percentile_latency_ms(0.95):.2f}"
     )
+    write_summary(args, metrics, time.monotonic() - started_at)
 
 
 def parse_args() -> argparse.Namespace:
@@ -252,6 +321,17 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=5.0,
         help="Print metrics every N seconds",
+    )
+    parser.add_argument(
+        "--duration",
+        type=float,
+        default=0.0,
+        help="Stop automatically after N seconds (0 keeps running until interrupted)",
+    )
+    parser.add_argument(
+        "--summary-json",
+        default="",
+        help="Optional path to write a JSON summary for the run",
     )
     return parser.parse_args()
 
