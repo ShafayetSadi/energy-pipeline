@@ -3,18 +3,12 @@
 Event-driven edge gateway for IoT-based smart energy monitoring. Built
 directly from [`docs/architecture.md`](docs/architecture.md).
 
-```text
-┌──────────────────┐    MQTT     ┌────────────┐   async pipeline   ┌────────────────┐
-│ Energy node(s)   │ ──────────► │  Mosquitto │ ─────────────────► │  Edge Gateway  │
-│ (or simulator)   │  energy/+/  │   broker   │                    │   (FastAPI)    │
-└──────────────────┘   telemetry └────────────┘                    └─────┬──────────┘
-                                                                          │
-                                                          validate · rule  │  aggregate
-                                                          engine · alert   │
-                                                                          ▼
-                                                                ┌────────────────┐
-                                                                │  TimescaleDB   │ ──► Grafana
-                                                                └────────────────┘
+```mermaid
+flowchart LR
+    A["Energy node(s)\n(or simulator)"] -->|"MQTT\nenergy/+/telemetry"| B[Mosquitto\nbroker]
+    B -->|async pipeline| C["Edge Gateway\n(FastAPI)"]
+    C -->|"validate · rule engine\nalert · aggregate"| D[TimescaleDB]
+    D --> E[Grafana]
 ```
 
 ## Stack
@@ -76,9 +70,10 @@ cp .env.example .env
 docker compose up -d --build
 
 # 3. wait for gateway readiness
-curl -fsS http://localhost:8000/ready
+curl -fsS http://localhost:8001/ready
 
-# 4. publish MQTT traffic (one of the built-in scenarios)
+# 4. build and run the MQTT simulator (one of the built-in scenarios)
+docker compose build simulator
 docker compose --profile loadtest run --rm simulator
 
 # or run a specific scenario from the host
@@ -89,33 +84,33 @@ uv run python simulator/mqtt_publisher.py \
 
 Open:
 
-- Gateway health: <http://localhost:8000/health>
-- API docs (Swagger): <http://localhost:8000/docs>
-- Grafana: <http://localhost:3000> (admin / admin)
+- Gateway health: <http://localhost:8001/health>
+- API docs (Swagger): <http://localhost:8001/docs>
+- Grafana: <http://localhost:3001> (admin / admin)
 
 ## REST API summary
 
-| Method | Path                                          | Description                       |
-| ------ | --------------------------------------------- | --------------------------------- |
-| GET    | `/health` / `/ready` / `/version`             | Liveness / readiness / build info |
-| GET    | `/api/v1/devices`                             | List registered devices           |
-| GET    | `/api/v1/devices/{device_id}`                 | One device                        |
-| GET    | `/api/v1/devices/{device_id}/status`          | Recent status history             |
-| GET    | `/api/v1/readings?device_id=...`              | Recent readings                   |
-| GET    | `/api/v1/readings/{device_id}/latest`         | Latest reading                    |
-| GET    | `/api/v1/readings/{device_id}/aggregate`      | Time-bucketed aggregates          |
-| GET    | `/api/v1/events`                              | Filtered events                   |
-| GET    | `/api/v1/events/{event_id}`                   | One event                         |
-| POST   | `/api/v1/events/{event_id}/acknowledge`       | Mark event acknowledged           |
-| GET    | `/api/v1/rules`                               | List loaded rules                 |
-| GET    | `/api/v1/rules/{rule_name}`                   | One rule                          |
-| PATCH  | `/api/v1/rules/{rule_name}`                   | Toggle enabled flag               |
-| POST   | `/api/v1/rules/reload`                        | Reload `rules.yaml`               |
-| GET    | `/api/v1/metrics/summary`                     | Counters + latencies              |
-| GET    | `/api/v1/metrics/throughput`                  | Throughput snapshot               |
-| GET    | `/api/v1/metrics/data-reduction`              | Data reduction ratio              |
-| GET    | `/api/v1/metrics/events-by-severity`          | Events grouped by severity        |
-| GET    | `/api/v1/metrics/quality-by-type`             | Validation failures by type       |
+| Method | Path                                     | Description                       |
+| ------ | ---------------------------------------- | --------------------------------- |
+| GET    | `/health` / `/ready` / `/version`        | Liveness / readiness / build info |
+| GET    | `/api/v1/devices`                        | List registered devices           |
+| GET    | `/api/v1/devices/{device_id}`            | One device                        |
+| GET    | `/api/v1/devices/{device_id}/status`     | Recent status history             |
+| GET    | `/api/v1/readings?device_id=...`         | Recent readings                   |
+| GET    | `/api/v1/readings/{device_id}/latest`    | Latest reading                    |
+| GET    | `/api/v1/readings/{device_id}/aggregate` | Time-bucketed aggregates          |
+| GET    | `/api/v1/events`                         | Filtered events                   |
+| GET    | `/api/v1/events/{event_id}`              | One event                         |
+| POST   | `/api/v1/events/{event_id}/acknowledge`  | Mark event acknowledged           |
+| GET    | `/api/v1/rules`                          | List loaded rules                 |
+| GET    | `/api/v1/rules/{rule_name}`              | One rule                          |
+| PATCH  | `/api/v1/rules/{rule_name}`              | Toggle enabled flag               |
+| POST   | `/api/v1/rules/reload`                   | Reload `rules.yaml`               |
+| GET    | `/api/v1/metrics/summary`                | Counters + latencies              |
+| GET    | `/api/v1/metrics/throughput`             | Throughput snapshot               |
+| GET    | `/api/v1/metrics/data-reduction`         | Data reduction ratio              |
+| GET    | `/api/v1/metrics/events-by-severity`     | Events grouped by severity        |
+| GET    | `/api/v1/metrics/quality-by-type`        | Validation failures by type       |
 
 ## Rule engine
 

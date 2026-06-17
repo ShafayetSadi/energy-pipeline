@@ -1,94 +1,180 @@
 {
   "uid": "energy-overview",
   "title": "Energy Overview",
-  "tags": ["energy", "overview"],
+  "tags": [
+    "energy",
+    "overview"
+  ],
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "10s",
-  "time": { "from": "now-6h", "to": "now" },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timezone": "browser",
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "Active devices",
-      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
-      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT count(*)::int AS value FROM devices WHERE status IN ('online','unknown')"
+          "rawSql": "SELECT count(*)::int AS value FROM devices WHERE status IN ('online','unknown')",
+          "format": "table"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" }
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value"
+      }
     },
     {
       "id": 2,
       "type": "stat",
       "title": "Readings (last 1h)",
-      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
-      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT count(*)::int AS value FROM energy_readings WHERE time > now() - interval '1 hour'"
+          "rawSql": "SELECT count(*)::int AS value FROM energy_readings WHERE time > now() - interval '1 hour'",
+          "format": "table"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" }
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value"
+      }
     },
     {
       "id": 3,
       "type": "stat",
       "title": "Critical events (24h)",
-      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
-      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT count(*)::int AS value FROM events WHERE severity='CRITICAL' AND time > now() - interval '24 hours'"
+          "rawSql": "SELECT count(*)::int AS value FROM events WHERE severity='CRITICAL' AND time > now() - interval '24 hours'",
+          "format": "table"
         }
       ],
-      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "green" }, { "color": "red", "value": 1 } ] } } }
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
     },
     {
       "id": 4,
       "type": "stat",
       "title": "Warnings (24h)",
-      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
-      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT count(*)::int AS value FROM events WHERE severity='WARNING' AND time > now() - interval '24 hours'"
+          "rawSql": "SELECT count(*)::int AS value FROM events WHERE severity='WARNING' AND time > now() - interval '24 hours'",
+          "format": "table"
         }
       ]
     },
     {
       "id": 5,
-      "type": "timeseries",
+      "type": "table",
       "title": "Latest power per device (W)",
-      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
-      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
       "targets": [
         {
           "refId": "A",
-          "format": "time_series",
-          "rawSql": "SELECT $__time(time), device_id, power_w FROM energy_readings WHERE time > now() - interval '15 minutes' ORDER BY 1"
+          "format": "table",
+          "rawSql": "SELECT DISTINCT ON (device_id) device_id, time AS last_seen, round(power_w::numeric, 2) AS power_w FROM energy_readings WHERE $__timeFilter(time) ORDER BY device_id, time DESC"
         }
-      ],
-      "options": { "legend": { "displayMode": "table", "placement": "right" } }
+      ]
     },
     {
       "id": 6,
-      "type": "timeseries",
+      "type": "table",
       "title": "Latest voltage per device (V)",
-      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
-      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
       "targets": [
         {
           "refId": "A",
-          "format": "time_series",
-          "rawSql": "SELECT $__time(time), device_id, voltage_v FROM energy_readings WHERE time > now() - interval '15 minutes' ORDER BY 1"
+          "format": "table",
+          "rawSql": "SELECT DISTINCT ON (device_id) device_id, time AS last_seen, round(voltage_v::numeric, 2) AS voltage_v FROM energy_readings WHERE $__timeFilter(time) ORDER BY device_id, time DESC"
         }
       ]
     }
