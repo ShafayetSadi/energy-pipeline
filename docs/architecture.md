@@ -59,8 +59,8 @@ These can be added later after the core system is stable.
 ```text
 ┌─────────────────────────────┐
 │     STM32 Energy Node       │
-│ Voltage/Current Sensors     │
-│ Local Power Calculation     │
+│  Voltage/Current Sensors    │
+│  Local Power Calculation    │
 └──────────────┬──────────────┘
                │
                │ MQTT telemetry/status/events
@@ -88,10 +88,10 @@ These can be added later after the core system is stable.
                │
       ┌────────┴─────────┐
       ▼                  ▼
-┌──────────────┐   ┌──────────────────┐
-│ TimescaleDB  │   │ Notification      │
+┌──────────────┐   ┌────────  ──────────┐
+│ TimescaleDB  │   │ Notification       │
 │ PostgreSQL   │   │ Slack/Email/Webhook│
-└──────┬───────┘   └──────────────────┘
+└──────┬───────┘   └────────────  ──────┘
        │
        ▼
 ┌─────────────────────────────┐

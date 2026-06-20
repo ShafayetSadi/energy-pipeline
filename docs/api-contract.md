@@ -8,13 +8,16 @@ UTC offsets.
 ## Health
 
 ### `GET /health`
+
 - 200: `{"status": "ok", "service": "edge-gateway"}`
 
 ### `GET /ready`
+
 - 200 when database is reachable: `{"status": "ready"}`
 - 503 otherwise
 
 ### `GET /version`
+
 ```json
 {
   "service": "edge-gateway",
@@ -27,6 +30,7 @@ UTC offsets.
 ## Devices
 
 ### `GET /api/v1/devices?limit=500`
+
 List devices known to the gateway.
 
 ```json
@@ -43,9 +47,11 @@ List devices known to the gateway.
 ```
 
 ### `GET /api/v1/devices/{device_id}`
+
 Same shape as the list element.
 
 ### `GET /api/v1/devices/{device_id}/status?limit=50`
+
 Returns the recent `device_status_history` rows.
 
 ```json
@@ -64,6 +70,7 @@ Returns the recent `device_status_history` rows.
 ## Readings
 
 ### `GET /api/v1/readings?device_id=house_0001&start_time=...&end_time=...&limit=200`
+
 `device_id` is required. Returns up to `limit` readings (default 200, max 5000).
 
 ```json
@@ -81,9 +88,11 @@ Returns the recent `device_status_history` rows.
 ```
 
 ### `GET /api/v1/readings/{device_id}/latest`
+
 The most recent reading, or 404.
 
 ### `GET /api/v1/readings/{device_id}/aggregate?start_time=...&end_time=...&interval=1 minute`
+
 Returns bucketed aggregates (`time_bucket` over the interval). Requires
 TimescaleDB.
 
@@ -104,6 +113,7 @@ TimescaleDB.
 ## Events
 
 ### `GET /api/v1/events?device_id=...&event_type=...&severity=...&start_time=...&end_time=...&limit=100`
+
 Returns at most `limit` events ordered by time DESC.
 
 ```json
@@ -126,14 +136,17 @@ Returns at most `limit` events ordered by time DESC.
 ```
 
 ### `GET /api/v1/events/{event_id}`
+
 One event.
 
 ### `POST /api/v1/events/{event_id}/acknowledge`
+
 Marks the event acknowledged. Returns `{"event_id": 42, "acknowledged": true}`.
 
 ## Rules
 
 ### `GET /api/v1/rules`
+
 ```json
 [
   {
@@ -141,18 +154,26 @@ Marks the event acknowledged. Returns `{"event_id": 42, "acknowledged": true}`.
     "enabled": true,
     "event_type": "UNDER_VOLTAGE",
     "severity": "WARNING",
-    "condition": { "type": "threshold", "field": "voltage_v", "operator": "lt", "value": 200 }
+    "condition": {
+      "type": "threshold",
+      "field": "voltage_v",
+      "operator": "lt",
+      "value": 200
+    }
   }
 ]
 ```
 
 ### `GET /api/v1/rules/{rule_name}`
+
 ### `PATCH /api/v1/rules/{rule_name}` `{"enabled": false}`
+
 ### `POST /api/v1/rules/reload` — reload from disk
 
 ## Metrics
 
 ### `GET /api/v1/metrics/summary`
+
 ```json
 {
   "uptime_seconds": 123.4,
@@ -164,6 +185,7 @@ Marks the event acknowledged. Returns `{"event_id": 42, "acknowledged": true}`.
 ```
 
 ### `GET /api/v1/metrics/throughput`
+
 ```json
 {
   "uptime_seconds": 123.4,
@@ -174,6 +196,7 @@ Marks the event acknowledged. Returns `{"event_id": 42, "acknowledged": true}`.
 ```
 
 ### `GET /api/v1/metrics/data-reduction`
+
 ```json
 {
   "raw_readings_stored": 5000,
@@ -183,11 +206,13 @@ Marks the event acknowledged. Returns `{"event_id": 42, "acknowledged": true}`.
 ```
 
 ### `GET /api/v1/metrics/events-by-severity?hours=24`
+
 ```json
 { "CRITICAL": 4, "WARNING": 8, "INFO": 12 }
 ```
 
 ### `GET /api/v1/metrics/quality-by-type?hours=24`
+
 ```json
 { "invalid_json": 3, "voltage_out_of_range": 2 }
 ```

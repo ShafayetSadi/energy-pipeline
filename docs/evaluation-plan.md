@@ -60,6 +60,7 @@ Reproduce the comparison described in `architecture.md` Section 14.
 ## Acceptance criteria
 
 A run is acceptable when:
+
 - The baseline scenario records `readings.stored == messages.received`.
 - The proposed scenario records `events.critical > 0` and
   `events.warning > 0` when anomaly scenarios are run.
