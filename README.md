@@ -182,7 +182,7 @@ service.
 - Drop an additional Grafana dashboard JSON into
   `config/grafana/dashboards/` — provisioning picks it up automatically.
 - Plug a new alert channel into `gateway/app/services/alert_service.py`
-  (the webhook client is already there; add a Slack / email implementation
-  alongside it).
+  (the webhook and Slack clients are already there; add an email
+  implementation alongside them by setting `ALERT_SLACK_WEBHOOK_URL`).
 - Add ML predictions later by writing into the `model_predictions` table
   — the schema is already in place.

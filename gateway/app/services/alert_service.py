@@ -41,7 +41,8 @@ class AlertService:
         self._client: httpx.AsyncClient | None = None
 
     async def start(self) -> None:
-        if self._settings.alert_webhook_url and self._client is None:
+        has_channel = self._settings.alert_webhook_url or self._settings.alert_slack_webhook_url
+        if has_channel and self._client is None:
             self._client = httpx.AsyncClient(timeout=10.0)
 
     async def stop(self) -> None:
@@ -116,6 +117,9 @@ class AlertService:
         if settings.alert_webhook_url:
             status, response = await self._send_webhook(message)
             deliveries.append(("webhook", status, response))
+        if settings.alert_slack_webhook_url:
+            status, response = await self._send_slack(message)
+            deliveries.append(("slack", status, response))
 
         await self._record_deliveries(event_id, deliveries)
         return True
@@ -138,6 +142,27 @@ class AlertService:
             resp = await self._client.post(
                 url, json=payload, timeout=5.0
             )
+            return (
+                "ok" if resp.is_success else "error",
+                f"status={resp.status_code} body={resp.text[:200]}",
+            )
+        except Exception as exc:
+            return ("error", f"exception: {exc}")
+
+    async def _send_slack(self, message: AlertMessage) -> tuple[str, str | None]:
+        if self._client is None:
+            return ("error", "client_not_initialized")
+        url = self._settings.alert_slack_webhook_url
+        text = (
+            f":rotating_light: *{message.severity}* `{message.event_type}` "
+            f"on `{message.device_id or 'unknown'}`\n"
+            f"{message.message}"
+        )
+        if message.value is not None and message.threshold is not None:
+            text += f"\nvalue=`{message.value}` threshold=`{message.threshold}`"
+        text += f"\n_event_id={message.event_id} time={message.time.isoformat()}_"
+        try:
+            resp = await self._client.post(url, json={"text": text}, timeout=5.0)
             return (
                 "ok" if resp.is_success else "error",
                 f"status={resp.status_code} body={resp.text[:200]}",

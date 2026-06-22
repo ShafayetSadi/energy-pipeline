@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     heartbeat_check_interval_seconds: int = 5
 
     alert_webhook_url: str = ""
+    alert_slack_webhook_url: str = ""
     alert_console_enabled: bool = True
     alert_critical_only: bool = True
 
