@@ -1,6 +1,6 @@
 set dotenv-load := true
 
-db_url := env_var_or_default("ALEMBIC_DATABASE_URL", "postgresql+asyncpg://energy:energy@127.0.0.1:54329/energy_monitoring")
+db_url := env("ALEMBIC_DATABASE_URL", "postgresql+asyncpg://energy:energy@127.0.0.1:54329/energy_monitoring")
 
 test:
 	uv run pytest gateway/tests -q
@@ -21,6 +21,12 @@ down:
 
 migrate:
 	DATABASE_URL={{db_url}} uv run alembic -c database/migrations/alembic.ini upgrade head
+
+upgrade revision="head":
+	DATABASE_URL={{db_url}} uv run alembic -c database/migrations/alembic.ini upgrade {{revision}}
+
+downgrade revision="-1":
+	DATABASE_URL={{db_url}} uv run alembic -c database/migrations/alembic.ini downgrade {{revision}}
 
 baseline:
 	bash scripts/run_baseline_test.sh
