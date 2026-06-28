@@ -34,6 +34,12 @@ baseline:
 proposed:
 	bash scripts/run_proposed_test.sh
 
+ab-high-throughput:
+	bash scripts/run_high_throughput_ab_test.sh
+
+anomaly-detection:
+	bash scripts/run_anomaly_detection_test.sh
+
 export-baseline:
 	python3 scripts/export_results.py --base-url http://localhost:8001 --output-dir results/baseline
 

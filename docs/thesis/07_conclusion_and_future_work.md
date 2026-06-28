@@ -24,6 +24,13 @@ Restate the most important practical and research limitations that affect interp
 
 Describe realistic next steps such as anomaly detection, load forecasting, predictive maintenance, or adaptive rule tuning.
 
+## 7.5 Future Storage Optimization
+
+Discuss selective raw-reading retention, downsampling, event-first long-term
+storage, and database-size experiments as future work. The current thesis should
+not claim measured storage reduction because the evaluated configuration stores
+raw readings in both baseline and proposed modes.
+
 ---
 
 ## Final checklist

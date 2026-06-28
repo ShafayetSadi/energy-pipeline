@@ -8,9 +8,9 @@ Present measured latency results and explain what they indicate about edge respo
 
 Show throughput behavior under the selected test scenarios and discuss system stability.
 
-## 6.3 Storage Reduction Results
+## 6.3 Validation and Data Quality Results
 
-Compare how much data was stored in baseline versus proposed architecture and discuss the significance.
+Present validation outcomes, invalid payload handling, and data-quality log evidence.
 
 ## 6.4 Event Detection Results
 
@@ -44,9 +44,9 @@ State technical, experimental, and methodological limitations honestly.
 | -------- | -------- | -------- | ----------- |
 |          |          |          |             |
 
-### Storage comparison
+### Event detection comparison
 
-| Scenario | Baseline | Proposed | Reduction |
+| Scenario | Expected Event | Observed Count | Observation |
 | -------- | -------- | -------- | --------- |
 |          |          |          |           |
 
@@ -63,6 +63,6 @@ State technical, experimental, and methodological limitations honestly.
 
 ## Migrated seed notes (draft/reference — verify before final use)
 
-- A core thesis claim is that the rule engine before storage reduces storage growth compared with the baseline approach.
+- Storage reduction is no longer a core measured thesis claim. Keep selective retention, downsampling, and event-only long-term storage as future work unless a separate controlled experiment is added.
 - Another working claim is that event detection latency is bounded by MQTT round-trip plus rule evaluation overhead.
 - Earlier notes mention sub-50ms behavior in test scenarios, but this must be verified against exported results before being stated in the final thesis.

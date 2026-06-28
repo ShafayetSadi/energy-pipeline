@@ -20,10 +20,10 @@ Possible metrics:
 
 - end-to-end latency
 - throughput
-- storage usage / reduction
 - event detection count
 - alert responsiveness
 - validation failure rate
+- storage optimization readiness as a future-work discussion, not as a measured result
 
 ## 5.5 Test Scenarios
 

@@ -6,7 +6,12 @@ from pathlib import Path
 
 
 def test_shell_scripts_parse() -> None:
-    scripts = ["scripts/run_baseline_test.sh", "scripts/run_proposed_test.sh"]
+    scripts = [
+        "scripts/run_anomaly_detection_test.sh",
+        "scripts/run_baseline_test.sh",
+        "scripts/run_high_throughput_ab_test.sh",
+        "scripts/run_proposed_test.sh",
+    ]
     result = subprocess.run(["bash", "-n", *scripts], check=False, capture_output=True)
     assert result.returncode == 0, result.stderr.decode()
 

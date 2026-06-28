@@ -169,21 +169,31 @@ always stores raw readings. Retention defaults keep raw readings, system
 metrics, status history, alert deliveries, and completed outbox rows for 30
 days, quality logs for 14 days, and events indefinitely.
 
-## Evaluation (baseline vs proposed)
+## Thesis validation and experiments
 
 ```bash
-# capture a baseline run
-just baseline
+# 1. check shell experiment scripts parse
+UV_CACHE_DIR=/tmp/uv-cache uv run pytest gateway/tests/scripts/test_scripts.py -q
 
-# capture a proposed run
-just proposed
+# 2. run the full gateway test suite
+UV_CACHE_DIR=/tmp/uv-cache uv run pytest gateway/tests -q
 
-# compare report.md files in results/{baseline,proposed}/
+# 3. run clean high-throughput A/B tests
+REPETITIONS=3 just ab-high-throughput
+
+# 4. run proposed-mode anomaly detection evidence
+just anomaly-detection
 ```
 
-The baseline/proposed scripts export `results/{baseline,proposed}/report.md`
-automatically. They also write `snapshot.json` locally for raw evidence, but
-generated snapshots and logs are ignored by git.
+Run tests before the Docker experiments so broken scripts or gateway logic fail
+quickly. `ab-high-throughput` resets the database for each run and compares
+baseline vs proposed using only `high_throughput.yaml`. `anomaly-detection`
+resets the database once and runs proposed-mode anomaly scenarios separately for
+event-detection evidence.
+
+The older `just baseline` and `just proposed` commands are still available for
+single exploratory runs. The thesis-focused outputs are written under
+`results/ab/high_throughput/` and `results/anomaly_detection/proposed/`.
 
 ## Tests
 

@@ -53,7 +53,7 @@
 6. [Chapter 6: Results and Discussion](./06_results_and_discussion.md)
    - 6.1 Latency Results
    - 6.2 Throughput Results
-   - 6.3 Storage Reduction Results
+   - 6.3 Validation and Data Quality Results
    - 6.4 Event Detection Results
    - 6.5 Dashboard and Alerting Results
    - 6.6 Comparison with Related Work
@@ -64,3 +64,4 @@
    - 7.2 Contributions
    - 7.3 Limitations
    - 7.4 Future AI/ML Extensions
+   - 7.5 Future Storage Optimization

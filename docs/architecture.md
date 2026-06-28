@@ -1133,12 +1133,12 @@ Panels:
 
 Panels:
 
-1. Baseline storage growth.
-2. Proposed storage growth.
-3. Data reduction ratio.
-4. Baseline latency.
-5. Proposed latency.
-6. Throughput comparison.
+1. Baseline latency.
+2. Proposed latency.
+3. Throughput comparison.
+4. Event counts by severity.
+5. Event counts by type.
+6. Validation failure counts.
 7. Alert latency distribution.
 
 ---
@@ -1243,8 +1243,8 @@ Characteristics:
 1. Every valid reading is stored directly.
 2. No rule engine before storage.
 3. Alerts may be generated only after database query/dashboard alerting.
-4. Higher storage growth.
-5. Less edge intelligence.
+4. Less edge intelligence.
+5. Serves as the raw-ingestion performance baseline.
 
 ## 14.2 Mode B: Proposed Edge Processing
 
@@ -1264,9 +1264,9 @@ Characteristics:
 
 1. Data is validated before storage.
 2. Critical events are detected immediately.
-3. Normal data can be downsampled/aggregated for long-term storage.
+3. Normal data can be downsampled/aggregated for long-term storage in future work.
 4. Invalid data is logged separately.
-5. Lower long-term storage growth.
+5. Storage reduction is not claimed unless selective retention/downsampling is enabled and measured separately.
 6. Faster alert response.
 
 ## 14.3 Metrics
@@ -1732,7 +1732,7 @@ Deliverables:
 3. Synthetic scenarios.
 4. Latency measurement.
 5. Throughput measurement.
-6. Storage/data reduction measurement.
+6. Event detection and validation-quality measurement.
 7. Exported result tables and charts.
 
 ## Milestone 6: Hardware Integration
@@ -1775,11 +1775,11 @@ Describe hardware, firmware, MQTT topics, gateway modules, database schema, dash
 
 ## Chapter 5: Evaluation
 
-Compare baseline and proposed modes.
+Compare baseline and proposed modes for latency, throughput, validation behavior, and event detection.
 
 ## Chapter 6: Results and Discussion
 
-Present latency, throughput, storage reduction, event detection, and dashboard screenshots.
+Present latency, throughput, validation behavior, event detection, and dashboard screenshots.
 
 ## Chapter 7: Conclusion and Future Work
 
@@ -1830,4 +1830,4 @@ These are useful implementation references for humans and AI coding agents:
 
 ## 24. Final Architecture Statement
 
-The system implements an STM32-based smart energy monitoring node that publishes measurements through MQTT. A Mosquitto broker routes telemetry to a FastAPI-based edge gateway. The gateway validates payloads, applies rule-based event detection, classifies abnormal conditions, stores time-series data and events in PostgreSQL/TimescaleDB, and triggers notifications for critical events. Grafana provides real-time observability and thesis evaluation dashboards. The system is evaluated by comparing a baseline raw-ingestion architecture against the proposed event-driven edge-processing architecture using latency, throughput, storage growth, data reduction, and event detection metrics. The final architecture claim is that this is an edge-first, event-driven observability architecture for smart energy monitoring, with rule-based detection, time-series storage, and future ML extension points.
+The system implements an STM32-based smart energy monitoring node that publishes measurements through MQTT. A Mosquitto broker routes telemetry to a FastAPI-based edge gateway. The gateway validates payloads, applies rule-based event detection, classifies abnormal conditions, stores time-series data and events in PostgreSQL/TimescaleDB, and triggers notifications for critical events. Grafana provides real-time observability and thesis evaluation dashboards. The system is evaluated by comparing a baseline raw-ingestion architecture against the proposed event-driven edge-processing architecture using latency, throughput, validation behavior, and event detection metrics. The final architecture claim is that this is an edge-first, event-driven observability architecture for smart energy monitoring, with rule-based detection, time-series storage, future storage optimization, and future ML extension points.

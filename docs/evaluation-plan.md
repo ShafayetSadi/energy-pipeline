@@ -11,10 +11,10 @@ Reproduce the comparison described in `architecture.md` Section 14.
 3. **Alert latency** — `alert_deliveries.sent_at - event.created_at`.
 4. **Throughput** — `messages.received` / uptime (see `/api/v1/metrics/throughput`).
 5. **Validation failure rate** — `validation.failures / messages.received`.
-6. **Data reduction ratio** — `1 - total_events / raw_readings_stored`
-   (see `/api/v1/metrics/data-reduction`).
-7. **Storage growth** — `pg_database_size('energy_monitoring')` sampled
-   before/after a fixed load.
+6. **Event detection counts** — event totals grouped by severity and event type.
+7. **Storage optimization readiness** — document the current raw-storage behavior
+   and identify selective retention/downsampling as future work, not as a
+   measured thesis result.
 
 ## Procedure
 
@@ -28,20 +28,13 @@ Reproduce the comparison described in `architecture.md` Section 14.
    starts the gateway, runs `high_throughput.yaml`, and exports
    `results/baseline/report.md` automatically.
 
-3. Optionally snapshot database size:
-
-   ```bash
-   psql -h localhost -U energy -d energy_monitoring \
-     -c "SELECT pg_database_size('energy_monitoring') AS bytes;"
-   ```
-
-4. Re-run in proposed mode:
+3. Re-run in proposed mode:
 
    ```bash
    just proposed
    ```
 
-5. Repeat with anomaly scenarios (`undervoltage`, `overload`, `power_spike`,
+4. Repeat with anomaly scenarios (`undervoltage`, `overload`, `power_spike`,
    `invalid_payloads`) to populate events. The proposed script already runs
    these scenarios before exporting `results/proposed/report.md`.
 
@@ -60,7 +53,12 @@ A run is acceptable when:
 - The baseline scenario records `readings.stored == messages.received`.
 - The proposed scenario records `events.critical > 0` and
   `events.warning > 0` when anomaly scenarios are run.
-- The data reduction ratio in proposed mode is `> 0.5` for the
-  `high_throughput.yaml` scenario (every overload event replaces many
-  stored rows in dashboard view).
 - Validation failure rate matches the configured `invalid_payload_ratio`.
+
+## Storage reduction scope
+
+Storage reduction is intentionally not treated as a final measured result in
+the current thesis version. Both baseline and proposed runs keep
+`STORE_RAW_READINGS=true`, so a fair storage-reduction claim would require a
+separate implementation and experiment using selective raw-data retention,
+downsampling, or event-only long-term storage. This remains future work.

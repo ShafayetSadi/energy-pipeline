@@ -47,7 +47,7 @@ Describe unit tests, integration checks, simulated scenarios, and comparison run
 ## Migrated seed notes (draft/reference)
 
 - `aiomqtt` was selected because it fits the native asyncio design of the gateway and avoids a callback-bridge style client.
-- The rule engine was placed before storage because the proposed system aims to reduce unnecessary storage growth while detecting important events earlier.
+- The rule engine was placed before alerting and dashboard persistence so abnormal conditions can be detected early; selective raw-data retention and downsampling remain future storage-optimization work.
 - The `rule_definitions` table exists even though rules are file-based, because it provides a future path for API-driven or UI-driven rule management.
 
 ---

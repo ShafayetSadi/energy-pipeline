@@ -6,7 +6,7 @@ Describe the broader context of smart energy monitoring, IoT-enabled metering, a
 
 ## 1.2 Problem Statement
 
-Explain the problem your project addresses: raw telemetry pipelines can create unnecessary storage load, delayed responses, and limited edge intelligence.
+Explain the problem your project addresses: raw telemetry pipelines can create delayed responses, limited edge intelligence, and future storage-management challenges as device counts grow.
 
 ## 1.3 Motivation
 
@@ -47,7 +47,7 @@ Write the main questions this thesis will answer.
 
 1. How can an event-driven edge gateway improve smart energy monitoring pipelines?
 2. How does the proposed architecture compare with a baseline telemetry-storage approach?
-3. Can rule-based processing reduce storage while preserving important events?
+3. Can rule-based processing detect abnormal energy events while maintaining low processing latency?
 4. How ready is the platform for future AI/ML extension?
 
 ## 1.7 Expected Contributions
