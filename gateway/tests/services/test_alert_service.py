@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 
 import httpx
 import pytest
-
 from gateway.app.services import alert_service as alert_service_module
 from gateway.app.services.alert_service import AlertService
 from gateway.app.services.rule_engine import RuleHit

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from ..logging_config import get_logger
-from ..services.ingestion_service import IngestionService
+from ..services.ingestion import IngestionService
 from .topics import is_supported_message_type, parse_topic
 
 logger = get_logger(__name__)

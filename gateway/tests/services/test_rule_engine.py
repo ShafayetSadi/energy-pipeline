@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
-
 from gateway.app.schemas.telemetry import TelemetryPayload
 from gateway.app.services.rule_engine import RuleEngine
 

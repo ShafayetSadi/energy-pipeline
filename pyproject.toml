@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings>=2.5.0",
     "python-dotenv>=1.0.0",
     "aiomqtt>=2.3.0",
+    "alembic>=1.16.0",
     "httpx>=0.28.0",
     "pyyaml>=6.0.0",
     "structlog>=24.4.0",
@@ -24,6 +25,7 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "ruff>=0.6.0",
     "mypy>=1.11.0",
+    "ty",
 ]
 
 [tool.pytest.ini_options]

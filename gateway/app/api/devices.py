@@ -6,7 +6,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db import repositories as repo
+from ..db.repositories import devices as device_repo
+from ..db.repositories import status as status_repo
 from ..db.session import get_db
 
 router = APIRouter(prefix="/api/v1/devices", tags=["devices"])
@@ -17,7 +18,7 @@ async def list_devices(
     limit: int = Query(500, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
-    devices = await repo.list_devices(db, limit=limit)
+    devices = await device_repo.list_devices(db, limit=limit)
     return [
         {
             "device_id": d.device_id,
@@ -35,7 +36,7 @@ async def list_devices(
 async def get_device(
     device_id: str, db: AsyncSession = Depends(get_db)
 ) -> dict[str, Any]:
-    device = await repo.get_device(db, device_id)
+    device = await device_repo.get_device(db, device_id)
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="device not found")
     return {
@@ -52,7 +53,7 @@ async def get_device(
 async def get_device_status(
     device_id: str, limit: int = Query(50, ge=1, le=500), db: AsyncSession = Depends(get_db)
 ) -> list[dict[str, Any]]:
-    history = await repo.device_status_history(db, device_id, limit=limit)
+    history = await status_repo.device_status_history(db, device_id, limit=limit)
     return [
         {
             "time": h.time.isoformat(),

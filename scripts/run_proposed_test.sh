@@ -13,7 +13,11 @@ export ENABLE_RULE_ENGINE=true
 export ENABLE_AGGREGATION=true
 export ENABLE_ALERTS=true
 
-docker compose up -d timescaledb mosquitto edge-gateway grafana
+docker compose up -d timescaledb mosquitto grafana
+echo "Running database migrations..."
+DATABASE_URL="${ALEMBIC_DATABASE_URL:-postgresql+asyncpg://energy:energy@127.0.0.1:54329/energy_monitoring}" \
+  uv run alembic -c database/migrations/alembic.ini upgrade head
+docker compose up -d edge-gateway
 echo "Waiting for edge gateway to be ready..."
 for i in {1..30}; do
   if curl -fsS http://localhost:8001/ready >/dev/null 2>&1; then

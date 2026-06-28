@@ -20,7 +20,8 @@ flowchart LR
 - **MQTT broker** — Eclipse Mosquitto (`config/mosquitto/mosquitto.conf`).
 - **Storage** — TimescaleDB hypertables for `energy_readings`, `events`,
   `system_metrics`, `device_status_history`; continuous aggregate
-  `energy_readings_1min` is created from `database/init.sql`.
+  `energy_readings_1min` is managed by Alembic migrations under
+  `database/migrations/`.
 - **Dashboards** — Grafana with four provisioned dashboards
   (`config/grafana/dashboards/`).
 - **Simulator** — `simulator/mqtt_publisher.py` with scenario YAML files
@@ -52,12 +53,14 @@ flowchart LR
 ├── config/
 │   ├── mosquitto/mosquitto.conf
 │   └── grafana/             # provisioning + dashboards
-├── database/init.sql        # TimescaleDB extension + continuous aggregate
+├── database/
+│   ├── init.sql             # minimal container bootstrap
+│   └── migrations/          # Alembic schema + TimescaleDB setup
 ├── simulator/
 │   ├── mqtt_publisher.py
 │   └── scenarios/*.yaml
 ├── scripts/                 # baseline/proposed test runners + report exporter
-└── results/                 # output directory for run snapshots
+└── results/                 # curated reports + ignored raw snapshots
 ```
 
 ## Quickstart
@@ -66,8 +69,14 @@ flowchart LR
 # 1. copy and adjust env
 cp .env.example .env
 
-# 2. start the stack (TimescaleDB + Mosquitto + edge gateway + Grafana)
-docker compose up -d --build
+# 2. start the stack and run migrations
+just up
+
+# raw equivalent, if you do not have just installed:
+docker compose up -d timescaledb mosquitto grafana
+ALEMBIC_DATABASE_URL=postgresql+asyncpg://energy:energy@127.0.0.1:54329/energy_monitoring \
+  uv run alembic -c database/migrations/alembic.ini upgrade head
+docker compose up -d edge-gateway
 
 # 3. wait for gateway readiness
 curl -fsS http://localhost:8001/ready
@@ -156,24 +165,29 @@ Set `PROCESSING_MODE=baseline` or `PROCESSING_MODE=proposed` in `.env`.
 
 ```bash
 # capture a baseline run
-./scripts/run_baseline_test.sh
-python scripts/export_results.py --output-dir results/baseline
+just baseline
 
 # capture a proposed run
-./scripts/run_proposed_test.sh
-python scripts/export_results.py --output-dir results/proposed
+just proposed
 
-# compare summary.md files in results/{baseline,proposed}/
+# compare report.md files in results/{baseline,proposed}/
 ```
+
+The baseline/proposed scripts export `results/{baseline,proposed}/report.md`
+automatically. They also write `snapshot.json` locally for raw evidence, but
+generated snapshots and logs are ignored by git.
 
 ## Tests
 
 ```bash
-uv run pytest gateway/tests -v
+just test
+
+# raw equivalent
+uv run pytest gateway/tests -q
 ```
 
-24 unit tests cover the validator, rule engine, topic parser, and metrics
-service.
+Unit tests cover the validator, rule engine, topic parser, services, workers,
+repositories, scripts, and API smoke behavior.
 
 ## Extending the system
 

@@ -62,7 +62,7 @@ class ValidationService:
         try:
             payload = TelemetryPayload.model_validate(data)
         except ValidationError as exc:
-            err = exc.errors()[0] if exc.errors() else {}
+            err: Any = exc.errors()[0] if exc.errors() else {}
             return ValidationResult(
                 valid=False,
                 error_type="schema_validation_error",

@@ -5,7 +5,9 @@ import asyncio
 from datetime import UTC, datetime
 
 from ..config import get_settings
-from ..db import repositories as repo
+from ..db.repositories import devices as device_repo
+from ..db.repositories import events as event_repo
+from ..db.repositories import status as status_repo
 from ..db.session import session_scope
 from ..logging_config import get_logger
 from ..services.alert_service import AlertService
@@ -65,7 +67,7 @@ class DeviceHeartbeatWorker:
 
     async def _check_once(self, timeout_seconds: int) -> None:
         async with session_scope() as session:
-            devices = await repo.list_devices(session, limit=10_000)
+            devices = await device_repo.list_devices(session, limit=10_000)
         now = datetime.now(UTC)
         for device in devices:
             last_seen = device.last_seen_at
@@ -83,15 +85,15 @@ class DeviceHeartbeatWorker:
     async def _mark_offline(
         self, device_id: str, age: float, last_seen: datetime
     ) -> None:
-        dedup_key = (device_id, "DEVICE_FAILURE", "CRITICAL")
+        dedup_key = (device_id, "DEVICE_FAILURE")
         if self._rule_engine.is_cooldown_active(dedup_key):
             return
         logger.warning("device_offline_detected", device_id=device_id, age_s=age)
         async with session_scope() as session:
-            await repo.update_device_status(
+            await device_repo.update_device_status(
                 session, device_id=device_id, status="offline", last_seen_at=last_seen
             )
-            await repo.record_status_history(
+            await status_repo.record_status_history(
                 session,
                 time=datetime.now(UTC),
                 device_id=device_id,
@@ -101,7 +103,7 @@ class DeviceHeartbeatWorker:
                 rssi_dbm=None,
                 metadata={"reason": "heartbeat_timeout", "last_seen": last_seen.isoformat()},
             )
-            event = await repo.insert_event(
+            event = await event_repo.insert_event(
                 session,
                 time=datetime.now(UTC),
                 device_id=device_id,

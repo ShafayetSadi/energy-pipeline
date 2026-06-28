@@ -6,7 +6,7 @@ import asyncio
 from ..logging_config import get_logger
 from ..mqtt.client import mqtt_client
 from ..mqtt.handlers import handle_mqtt_message
-from ..services.ingestion_service import IngestionService
+from ..services.ingestion import IngestionService
 from ..services.metrics_service import MetricsService
 
 logger = get_logger(__name__)

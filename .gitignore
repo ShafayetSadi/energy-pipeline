@@ -18,8 +18,8 @@ venv/
 # Runtime artifacts
 runtime/
 results/raw/
-results/*.log
-results/*.json
+results/**/*.log
+results/**/snapshot.json
 
 # IDE
 .vscode/

@@ -87,7 +87,8 @@ class AggregationWorker:
                     text("DELETE FROM data_quality_logs WHERE time < :cutoff"),
                     {"cutoff": cutoff},
                 )
-                if result.rowcount:
-                    logger.info("quality_logs_pruned", rows=result.rowcount)
+                rowcount = getattr(result, "rowcount", 0)
+                if rowcount:
+                    logger.info("quality_logs_pruned", rows=rowcount)
             except Exception as exc:  # pragma: no cover
                 logger.debug("quality_logs_prune_failed", error=str(exc))

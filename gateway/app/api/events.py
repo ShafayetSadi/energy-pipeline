@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db import repositories as repo
+from ..db.repositories import events as event_repo
 from ..db.session import get_db
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
@@ -40,7 +40,7 @@ async def list_events(
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
-    rows = await repo.list_events(
+    rows = await event_repo.list_events(
         db,
         device_id=device_id,
         event_type=event_type,
@@ -54,7 +54,7 @@ async def list_events(
 
 @router.get("/{event_id}")
 async def get_event(event_id: int, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
-    event = await repo.get_event(db, event_id)
+    event = await event_repo.get_event(db, event_id)
     if event is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="event not found")
     return _event_to_dict(event)
@@ -62,7 +62,7 @@ async def get_event(event_id: int, db: AsyncSession = Depends(get_db)) -> dict[s
 
 @router.post("/{event_id}/acknowledge", status_code=status.HTTP_200_OK)
 async def acknowledge_event(event_id: int, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
-    ok = await repo.acknowledge_event(db, event_id)
+    ok = await event_repo.acknowledge_event(db, event_id)
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="event not found")
     await db.commit()

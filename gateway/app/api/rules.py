@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db import repositories as repo
+from ..db.repositories import rules as rule_repo
 from ..db.session import get_db
 from ..services.rule_engine import RuleEngine
 
@@ -54,7 +54,7 @@ async def patch_rule(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="rule not found")
     if patch.enabled is not None:
         rule["enabled"] = patch.enabled
-        await repo.upsert_rule_definition(
+        await rule_repo.upsert_rule_definition(
             db,
             rule_name=rule_name,
             enabled=patch.enabled,

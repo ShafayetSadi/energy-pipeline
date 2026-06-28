@@ -1,9 +1,21 @@
 """Tests for MetricsService counter / snapshot behavior."""
 from __future__ import annotations
 
-import asyncio
+from contextlib import asynccontextmanager
 
+import pytest
+from gateway.app.services import metrics_service as metrics_service_module
 from gateway.app.services.metrics_service import LatencySummary, MetricsService
+
+
+@asynccontextmanager
+async def _noop_session_scope():
+    yield None
+
+
+@pytest.fixture(autouse=True)
+def _stub_session_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(metrics_service_module, "session_scope", _noop_session_scope)
 
 
 def test_latency_summary_empty() -> None:
@@ -38,8 +50,8 @@ def test_metrics_incr_and_snapshot() -> None:
     assert snap["uptime_seconds"] >= 0
 
 
-def test_metrics_start_stop_no_db() -> None:
+async def test_metrics_start_stop_no_db() -> None:
     svc = MetricsService()
-    asyncio.run(svc.start())
+    await svc.start()
     svc.incr("test")
-    asyncio.run(svc.stop())
+    await svc.stop()

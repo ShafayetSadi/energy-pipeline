@@ -18,42 +18,38 @@ Reproduce the comparison described in `architecture.md` Section 14.
 
 ## Procedure
 
-1. Bring the stack up in baseline mode:
+1. Bring the stack up in baseline mode and run the baseline scenario:
 
    ```bash
-   PROCESSING_MODE=baseline \
-     STORE_RAW_READINGS=true \
-     ENABLE_RULE_ENGINE=false \
-     ENABLE_ALERTS=false \
-     docker compose up -d --build
+   just baseline
    ```
 
-2. Run the `high_throughput.yaml` scenario (200 devices × 1s × 120s):
+2. The script starts TimescaleDB/Mosquitto/Grafana, runs Alembic migrations,
+   starts the gateway, runs `high_throughput.yaml`, and exports
+   `results/baseline/report.md` automatically.
+
+3. Optionally snapshot database size:
 
    ```bash
-   uv run python simulator/mqtt_publisher.py \
-     --host localhost --port 1883 \
-     --scenario-file simulator/scenarios/high_throughput.yaml
-   ```
-
-3. Snapshot baseline metrics:
-
-   ```bash
-   python scripts/export_results.py --output-dir results/baseline
    psql -h localhost -U energy -d energy_monitoring \
      -c "SELECT pg_database_size('energy_monitoring') AS bytes;"
    ```
 
-4. Stop the gateway, change `PROCESSING_MODE=proposed` and re-run with
-   the same scenario. Snapshot again into `results/proposed/`.
+4. Re-run in proposed mode:
+
+   ```bash
+   just proposed
+   ```
 
 5. Repeat with anomaly scenarios (`undervoltage`, `overload`, `power_spike`,
-   `invalid_payloads`) to populate events.
+   `invalid_payloads`) to populate events. The proposed script already runs
+   these scenarios before exporting `results/proposed/report.md`.
 
 ## Outputs
 
-- `results/{baseline,proposed}/snapshot.json` — raw counters/latencies.
-- `results/{baseline,proposed}/report.md` — human-readable summary.
+- `results/{baseline,proposed}/report.md` — human-readable summary, tracked.
+- `results/{baseline,proposed}/snapshot.json` — raw counters/latencies,
+  generated locally and ignored by git.
 - (Optional) export `system_metrics` and `events` tables to CSV for
   plotting in the thesis.
 

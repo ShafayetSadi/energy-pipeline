@@ -7,7 +7,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db import repositories as repo
+from ..db.repositories import events as event_repo
+from ..db.repositories import quality as quality_repo
 from ..db.session import get_db
 
 router = APIRouter(prefix="/api/v1/metrics", tags=["metrics"])
@@ -73,7 +74,7 @@ async def events_by_severity(
     hours: int = 24, db: AsyncSession = Depends(get_db)
 ) -> dict[str, int]:
     since = datetime.now(UTC) - timedelta(hours=hours)
-    return await repo.count_events_by_severity(db, since=since)
+    return await event_repo.count_events_by_severity(db, since=since)
 
 
 @router.get("/quality-by-type")
@@ -81,4 +82,4 @@ async def quality_by_type(
     hours: int = 24, db: AsyncSession = Depends(get_db)
 ) -> dict[str, int]:
     since = datetime.now(UTC) - timedelta(hours=hours)
-    return await repo.count_quality_logs_by_type(db, since=since)
+    return await quality_repo.count_quality_logs_by_type(db, since=since)
