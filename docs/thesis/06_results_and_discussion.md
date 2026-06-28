@@ -158,6 +158,17 @@ details, system metrics, and thesis evaluation summaries. The dashboard layer
 does not create the underlying measurements; it makes the gateway behavior
 visible.
 
+The following dashboard screenshots should be included in the final formatted
+thesis after capturing them from the clean proposed run:
+
+| Figure | Dashboard | Purpose |
+| --- | --- | --- |
+| Figure 6.1 | Energy Overview | Shows system-level readings, load, voltage, and event counts |
+| Figure 6.2 | Device Detail | Shows per-device measurements with thresholds and event context |
+| Figure 6.3 | Event Timeline | Shows rule-generated event records and severity classification |
+| Figure 6.4 | System Observability | Shows gateway message rate, validation rate, and latency metrics |
+| Figure 6.5 | Thesis Evaluation | Shows the A/B and anomaly evidence summary used in this chapter |
+
 The implemented dashboards support the following views:
 
 | Dashboard | Purpose |
