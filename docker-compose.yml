@@ -65,6 +65,11 @@ services:
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
       DATABASE_URL: postgresql+asyncpg://energy:energy@timescaledb:5432/energy_monitoring
+      PROCESSING_MODE: ${PROCESSING_MODE:-proposed}
+      STORE_RAW_READINGS: ${STORE_RAW_READINGS:-true}
+      ENABLE_RULE_ENGINE: ${ENABLE_RULE_ENGINE:-true}
+      ENABLE_AGGREGATION: ${ENABLE_AGGREGATION:-true}
+      ENABLE_ALERTS: ${ENABLE_ALERTS:-true}
     ports:
       - "8001:8000"
     volumes:

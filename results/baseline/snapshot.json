@@ -1,0 +1,42 @@
+{
+  "captured_at": "2026-06-22T10:16:59.352889+00:00",
+  "base_url": "http://localhost:8001",
+  "summary": {
+    "uptime_seconds": 3335.2406696279995,
+    "counters": {
+      "events.critical": 395,
+      "events.type.device_failure": 395,
+      "devices.offline_detected": 395,
+      "messages.received": 24722,
+      "validation.telemetry.success": 23419,
+      "messages.telemetry": 23419,
+      "readings.stored": 23419,
+      "validation.failures": 500,
+      "validation.status.success": 803,
+      "messages.status": 803
+    },
+    "latencies": {
+      "telemetry": {
+        "count": 10000.0,
+        "avg_ms": 10.317573139204432,
+        "p50_ms": 11.470081000879873,
+        "p95_ms": 13.04307099962898,
+        "p99_ms": 13.78646699959063
+      },
+      "status": {
+        "count": 803.0,
+        "avg_ms": 9.179922206720782,
+        "p50_ms": 9.544230999381398,
+        "p95_ms": 12.18114599942055,
+        "p99_ms": 12.889408000773983
+      }
+    }
+  },
+  "events_by_severity": {
+    "WARNING": 7342,
+    "CRITICAL": 903
+  },
+  "quality_by_type": {
+    "invalid_json": 1178
+  }
+}
