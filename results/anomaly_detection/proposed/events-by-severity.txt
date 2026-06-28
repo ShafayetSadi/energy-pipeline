@@ -1,0 +1,7 @@
+ severity | count 
+----------+-------
+ CRITICAL |   296
+ INFO     |    31
+ WARNING  |   475
+(3 rows)
+

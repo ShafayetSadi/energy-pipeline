@@ -1,0 +1,38 @@
+{
+    "uptime_seconds": 724.5531376139998,
+    "counters": {
+        "messages.received": 1925,
+        "validation.telemetry.success": 1709,
+        "messages.telemetry": 1709,
+        "readings.stored": 1709,
+        "events.critical": 296,
+        "events.type.overload": 284,
+        "events.warning": 475,
+        "events.type.power_spike": 430,
+        "validation.status.success": 68,
+        "messages.status": 68,
+        "events.type.under_voltage": 31,
+        "events.info": 31,
+        "events.type.voltage_anomaly": 31,
+        "events.type.device_failure": 12,
+        "devices.offline_detected": 12,
+        "events.type.over_voltage": 14,
+        "validation.failures": 148
+    },
+    "latencies": {
+        "telemetry": {
+            "count": 1709.0,
+            "avg_ms": 6.616710945005948,
+            "p50_ms": 6.556968000040797,
+            "p95_ms": 7.975591999638709,
+            "p99_ms": 8.781725000517326
+        },
+        "status": {
+            "count": 68.0,
+            "avg_ms": 5.297161514751197,
+            "p50_ms": 5.240858000433946,
+            "p95_ms": 6.169575000058103,
+            "p99_ms": 6.292402000326547
+        }
+    }
+}
