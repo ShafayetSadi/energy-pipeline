@@ -14,7 +14,7 @@ Possible contribution areas:
 - configurable rule-driven event detection
 - time-series observability pipeline
 - baseline vs proposed evaluation
-- AI/ML-ready extension design
+- future ML extension points
 
 ## 7.3 Limitations
 

@@ -27,7 +27,7 @@ for i in {1..30}; do
   sleep 2
 done
 
-echo "Running high-throughput scenario for 60s..."
+echo "Running high-throughput scenario for 120s..."
 docker compose run --rm simulator \
   python mqtt_publisher.py --scenario-file /app/scenarios/high_throughput.yaml
 

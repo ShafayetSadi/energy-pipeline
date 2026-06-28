@@ -1,4 +1,4 @@
-# Architecture: Event-Driven Edge Gateway for IoT-Based Smart Energy Monitoring
+# Architecture: Edge-First Event-Driven Observability for Smart Energy Monitoring
 
 > Repository document: `architecture.md`  
 > Project type: ECE Thesis/Project implementation  
@@ -9,9 +9,9 @@
 
 ## 1. Project Summary
 
-This project implements an event-driven smart energy monitoring system. STM32-based energy nodes measure electrical parameters such as voltage, current, and power, then publish telemetry through MQTT. A FastAPI-based edge gateway consumes the MQTT stream, validates payloads, detects rule-based events, classifies severity, stores time-series data in PostgreSQL/TimescaleDB, and exposes data to Grafana dashboards. Critical events trigger notifications.
+This project implements an edge-first, event-driven observability architecture for smart energy monitoring. STM32-based energy nodes measure electrical parameters such as voltage, current, and power, then publish telemetry through MQTT. A FastAPI-based edge gateway consumes the MQTT stream, validates payloads, detects rule-based events, classifies severity, stores time-series data in PostgreSQL/TimescaleDB, and exposes data to Grafana dashboards. Critical events trigger notifications.
 
-The thesis contribution is the **edge gateway layer**, not only the sensor node or dashboard. The gateway acts as a local intelligence layer between IoT devices and long-term storage/cloud systems. It reduces unnecessary storage, improves event responsiveness, and prepares the system for future AI/ML-based anomaly detection.
+The thesis contribution is the **edge gateway layer**, not only the sensor node or dashboard. The gateway acts as a local intelligence layer between IoT devices and long-term storage/cloud systems. The core architectural claim is an **edge-first, event-driven observability architecture for smart energy monitoring, with rule-based detection, time-series storage, and future ML extension points**.
 
 ---
 
@@ -111,7 +111,7 @@ These can be added later after the core system is stable.
 2. **Event-driven design:** Critical events are detected and prioritized separately from normal telemetry.
 3. **Time-series-first storage:** Sensor readings are stored as timestamped measurements optimized for time-window queries.
 4. **Observability by design:** The system stores both energy data and operational metrics.
-5. **AI/ML-ready schema:** Rule-based events and historical readings can later be used as training data or weak labels.
+5. **Future ML extension points:** Rule-based events and historical readings can later be used as training data or weak labels.
 6. **Modularity:** MQTT, gateway, database, dashboard, and notifications are separate services.
 7. **Reproducibility:** The full backend stack should run through Docker Compose.
 8. **Measurable thesis contribution:** Every major design decision should support measurable evaluation.
@@ -1719,10 +1719,10 @@ Recommended thesis title:
 Design and Implementation of an Event-Driven Edge Gateway for IoT-Based Smart Energy Monitoring
 ```
 
-Alternative title with future AI/ML direction:
+Alternative title emphasizing the architecture claim:
 
 ```text
-An AI-Ready Edge Observability Architecture for Smart Energy Monitoring
+An Edge-First, Event-Driven Observability Architecture for Smart Energy Monitoring
 ```
 
 ---
@@ -1745,4 +1745,4 @@ These are useful implementation references for humans and AI coding agents:
 
 ## 24. Final Architecture Statement
 
-The system implements an STM32-based smart energy monitoring node that publishes measurements through MQTT. A Mosquitto broker routes telemetry to a FastAPI-based edge gateway. The gateway validates payloads, applies rule-based event detection, classifies abnormal conditions, stores time-series data and events in PostgreSQL/TimescaleDB, and triggers notifications for critical events. Grafana provides real-time observability and thesis evaluation dashboards. The system is evaluated by comparing a baseline raw-ingestion architecture against the proposed event-driven edge-processing architecture using latency, throughput, storage growth, data reduction, and event detection metrics. The design is AI/ML-ready because it preserves historical time-series data, rule-generated event labels, and future model-prediction tables for later anomaly detection or load forecasting.
+The system implements an STM32-based smart energy monitoring node that publishes measurements through MQTT. A Mosquitto broker routes telemetry to a FastAPI-based edge gateway. The gateway validates payloads, applies rule-based event detection, classifies abnormal conditions, stores time-series data and events in PostgreSQL/TimescaleDB, and triggers notifications for critical events. Grafana provides real-time observability and thesis evaluation dashboards. The system is evaluated by comparing a baseline raw-ingestion architecture against the proposed event-driven edge-processing architecture using latency, throughput, storage growth, data reduction, and event detection metrics. The final architecture claim is that this is an edge-first, event-driven observability architecture for smart energy monitoring, with rule-based detection, time-series storage, and future ML extension points.

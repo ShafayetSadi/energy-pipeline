@@ -27,17 +27,22 @@ for i in {1..30}; do
   sleep 2
 done
 
-echo "Running mixed scenarios..."
-docker compose run --rm simulator \
-  python mqtt_publisher.py --scenario-file /app/scenarios/undervoltage.yaml
-docker compose run --rm simulator \
-  python mqtt_publisher.py --scenario-file /app/scenarios/overload.yaml
-docker compose run --rm simulator \
-  python mqtt_publisher.py --scenario-file /app/scenarios/power_spike.yaml
-docker compose run --rm simulator \
-  python mqtt_publisher.py --scenario-file /app/scenarios/invalid_payloads.yaml
-docker compose run --rm simulator \
-  python mqtt_publisher.py --scenario-file /app/scenarios/high_throughput.yaml
+run_scenario() {
+  local label="$1"
+  local duration="$2"
+  local file="$3"
+
+  echo "Running ${label} scenario for ${duration}s..."
+  docker compose run --rm simulator \
+    python mqtt_publisher.py --scenario-file "${file}"
+}
+
+echo "Running mixed scenarios sequentially. Estimated simulator time: 840s (~14 minutes)."
+run_scenario "undervoltage" 180 /app/scenarios/undervoltage.yaml
+run_scenario "overload" 180 /app/scenarios/overload.yaml
+run_scenario "power spike" 240 /app/scenarios/power_spike.yaml
+run_scenario "invalid payloads" 120 /app/scenarios/invalid_payloads.yaml
+run_scenario "high-throughput" 120 /app/scenarios/high_throughput.yaml
 
 echo "Snapshotting counts..."
 docker compose exec -T timescaledb \
