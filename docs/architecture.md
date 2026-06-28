@@ -79,10 +79,11 @@ These can be added later after the core system is stable.
 │ MQTT Consumer                               │
 │ Payload Validator                           │
 │ Rule Engine                                 │
+│ Storage Policy Service                      │
 │ Event Classifier                            │
 │ Aggregation/Downsampling                    │
 │ Metrics Collector                           │
-│ Alert Manager                               │
+│ Alert Outbox + Delivery Worker              │
 │ REST API                                    │
 └──────────────┬──────────────────────────────┘
                │
@@ -768,6 +769,7 @@ device_status_history
 system_metrics
 rule_definitions
 alert_deliveries
+alert_outbox
 model_predictions        # future extension
 ```
 
@@ -872,6 +874,30 @@ CREATE TABLE IF NOT EXISTS alert_deliveries (
     sent_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS alert_outbox (
+    outbox_id BIGSERIAL PRIMARY KEY,
+    event_id BIGINT NOT NULL REFERENCES events(event_id),
+    channel TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMPTZ NOT NULL,
+    last_error TEXT,
+    locked_at TIMESTAMPTZ,
+    sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_alert_outbox_due
+ON alert_outbox (status, next_attempt_at);
+
+CREATE INDEX IF NOT EXISTS idx_alert_outbox_event
+ON alert_outbox (event_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_alert_outbox_event_channel
+ON alert_outbox (event_id, channel);
+
 -- Future AI/ML extension table. It can remain unused in v1.
 CREATE TABLE IF NOT EXISTS model_predictions (
     time TIMESTAMPTZ NOT NULL,
@@ -903,17 +929,35 @@ SELECT create_hypertable('device_status_history', 'time', if_not_exists => TRUE)
 
 ## 10.5 Retention Policy
 
-Recommended retention strategy:
+The gateway uses a configurable storage policy for valid telemetry. `baseline`
+mode always stores raw readings. `proposed` mode uses `STORAGE_POLICY`.
+
+| Policy | Raw normal readings | Raw event-triggering readings | Events | Quality logs |
+| --- | --- | --- | --- | --- |
+| `raw` | stored | stored | stored | stored |
+| `hybrid` | stored only when `STORE_RAW_READINGS=true` | stored | stored | stored |
+| `event_only` | skipped | stored | stored | stored |
+| `aggregate_only` | skipped | skipped | stored | stored |
+
+Invalid payloads always write `data_quality_logs`. Events remain the durable
+evidence source and are stored whenever generated.
+
+Thesis-safe default retention strategy:
 
 | Data                | Retention                       |
 | ------------------- | ------------------------------- |
-| Raw readings        | 7–30 days for prototype         |
+| Raw readings        | 30 days                         |
 | Aggregated readings | Several months                  |
 | Critical events     | Permanent for thesis evaluation |
-| Data quality logs   | 7–30 days                       |
-| System metrics      | 7–30 days                       |
+| Data quality logs   | 14 days                         |
+| System metrics      | 30 days                         |
+| Device status       | 30 days                         |
+| Alert deliveries    | 30 days                         |
+| Alert outbox rows   | 30 days after sent/discarded    |
 
-For thesis, keep enough data to produce evaluation charts.
+Retention is enforced by the background maintenance worker. A value of `0`
+disables pruning for that table. Events and model predictions are retained
+indefinitely by default.
 
 ## 10.6 Aggregated Data
 
@@ -1101,6 +1145,18 @@ Panels:
 
 ## 13. Alerting Design
 
+Alert delivery is durable and asynchronous:
+
+```text
+MQTT -> validation -> rule engine -> storage policy -> database
+                                      -> alert_outbox -> delivery worker
+```
+
+Event producers enqueue alert work after event persistence. The delivery worker
+claims due rows with `FOR UPDATE SKIP LOCKED`, sends console/webhook/Slack
+notifications, records every attempt in `alert_deliveries`, and marks outbox
+rows `sent`, `failed`, or `discarded`.
+
 ## 13.1 Alert Channels
 
 Initial recommended channels:
@@ -1109,7 +1165,7 @@ Initial recommended channels:
 Console log
 Webhook
 Slack webhook
-Email, optional
+Email, optional future channel
 ```
 
 ## 13.2 Alert Trigger Policy
@@ -1154,6 +1210,16 @@ If the same event remains active:
 ```text
 Update existing event count
 Do not send repeated notifications every sample
+```
+
+Retries use bounded backoff:
+
+```text
+attempt 1 -> retry after 30 seconds
+attempt 2 -> retry after 2 minutes
+attempt 3 -> retry after 10 minutes
+attempt 4 -> retry after 30 minutes
+attempt 5 -> discard
 ```
 
 ---
@@ -1351,8 +1417,27 @@ MQTT_STATUS_TOPIC=energy/+/status
 
 DATABASE_URL=postgresql+asyncpg://energy:energy@timescaledb:5432/energy_monitoring
 
+PROCESSING_MODE=proposed
+STORAGE_POLICY=raw
+STORE_RAW_READINGS=true
+
+ENABLE_ALERTS=true
 ALERT_WEBHOOK_URL=
+ALERT_SLACK_WEBHOOK_URL=
 ALERT_COOLDOWN_SECONDS=300
+ALERT_CRITICAL_ONLY=true
+ALERT_OUTBOX_ENABLED=true
+ALERT_OUTBOX_POLL_SECONDS=5
+ALERT_OUTBOX_BATCH_SIZE=50
+ALERT_OUTBOX_MAX_ATTEMPTS=5
+
+RETENTION_ENABLED=true
+RETENTION_RAW_READINGS_DAYS=30
+RETENTION_QUALITY_LOGS_DAYS=14
+RETENTION_SYSTEM_METRICS_DAYS=30
+RETENTION_STATUS_HISTORY_DAYS=30
+RETENTION_ALERT_DELIVERIES_DAYS=30
+RETENTION_ALERT_OUTBOX_DAYS=30
 
 RULES_FILE=/app/config/rules.yaml
 

@@ -49,7 +49,7 @@ docker compose exec -T timescaledb \
   psql -U energy -d energy_monitoring -c "SELECT severity, count(*) FROM events GROUP BY severity;"
 
 echo "Snapshotting metric counters..."
-curl -s http://localhost:8001/api/v1/metrics/summary | python -m json.tool
+curl -s http://localhost:8001/api/v1/metrics/summary | python3 -m json.tool
 
 echo "Exporting proposed metrics (before in-memory counters are lost)..."
 python3 "${SCRIPT_DIR}/export_results.py" \

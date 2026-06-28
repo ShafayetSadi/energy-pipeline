@@ -1,5 +1,4 @@
-"""Aggregation worker: periodically refreshes continuous aggregates when
-TimescaleDB is available, and prunes old data quality logs.
+"""Maintenance worker: refreshes continuous aggregates and prunes retained data.
 """
 from __future__ import annotations
 
@@ -16,7 +15,7 @@ logger = get_logger(__name__)
 
 
 class AggregationWorker:
-    """Refreshes TimescaleDB continuous aggregates and trims old quality logs."""
+    """Refreshes TimescaleDB continuous aggregates and applies retention settings."""
 
     def __init__(self) -> None:
         self._settings = get_settings()
@@ -24,7 +23,7 @@ class AggregationWorker:
         self._stop = asyncio.Event()
 
     async def start(self) -> None:
-        if not self._settings.enable_aggregation:
+        if not self._settings.enable_aggregation and not self._settings.retention_enabled:
             return
         if self._task is None:
             self._stop.clear()
@@ -53,10 +52,10 @@ class AggregationWorker:
 
     async def _tick(self) -> None:
         await self._refresh_continuous_aggregates()
-        await self._prune_quality_logs()
+        await self._prune_retained_tables()
 
     async def _refresh_continuous_aggregates(self) -> None:
-        if not self._settings.enable_timescale:
+        if not self._settings.enable_aggregation or not self._settings.enable_timescale:
             return
         async with session_scope() as session:
             try:
@@ -79,16 +78,61 @@ class AggregationWorker:
                         "continuous_aggregate_refresh_failed", view=view, error=str(exc)
                     )
 
-    async def _prune_quality_logs(self) -> None:
-        cutoff = datetime.now(UTC) - timedelta(days=7)
+    def _retention_cutoff(self, days: int) -> datetime | None:
+        if not self._settings.retention_enabled or days <= 0:
+            return None
+        return datetime.now(UTC) - timedelta(days=days)
+
+    async def _prune_retained_tables(self) -> None:
+        plans = (
+            ("energy_readings", "time", self._settings.retention_raw_readings_days),
+            ("data_quality_logs", "time", self._settings.retention_quality_logs_days),
+            ("system_metrics", "time", self._settings.retention_system_metrics_days),
+            (
+                "device_status_history",
+                "time",
+                self._settings.retention_status_history_days,
+            ),
+            (
+                "alert_deliveries",
+                "sent_at",
+                self._settings.retention_alert_deliveries_days,
+            ),
+            (
+                "alert_outbox",
+                "created_at",
+                self._settings.retention_alert_outbox_days,
+            ),
+        )
+        for table, column, days in plans:
+            cutoff = self._retention_cutoff(days)
+            if cutoff is None:
+                continue
+            if table == "alert_outbox":
+                await self._prune_table(
+                    table,
+                    column,
+                    cutoff,
+                    " AND status IN ('sent', 'discarded')",
+                )
+            else:
+                await self._prune_table(table, column, cutoff)
+
+    async def _prune_table(
+        self,
+        table: str,
+        column: str,
+        cutoff: datetime,
+        extra_where: str = "",
+    ) -> None:
         async with session_scope() as session:
             try:
                 result = await session.execute(
-                    text("DELETE FROM data_quality_logs WHERE time < :cutoff"),
+                    text(f"DELETE FROM {table} WHERE {column} < :cutoff{extra_where}"),
                     {"cutoff": cutoff},
                 )
                 rowcount = getattr(result, "rowcount", 0)
                 if rowcount:
-                    logger.info("quality_logs_pruned", rows=rowcount)
+                    logger.info("retention_pruned", table=table, rows=rowcount)
             except Exception as exc:  # pragma: no cover
-                logger.debug("quality_logs_prune_failed", error=str(exc))
+                logger.debug("retention_prune_failed", table=table, error=str(exc))

@@ -10,6 +10,7 @@ from ...logging_config import get_logger
 from ..alert_service import AlertService
 from ..metrics_service import MetricsService
 from ..rule_engine import RuleEngine
+from ..storage_policy import StoragePolicyService
 from ..validation_service import ValidationService
 from .device_events import handle_device_event
 from .helpers import safe_text
@@ -29,11 +30,13 @@ class IngestionService:
         rule_engine: RuleEngine,
         alert_service: AlertService,
         metrics: MetricsService,
+        storage_policy: StoragePolicyService,
     ) -> None:
         self.validator = validator
         self.rule_engine = rule_engine
         self.alert_service = alert_service
         self.metrics = metrics
+        self.storage_policy = storage_policy
         self.settings = get_settings()
 
     async def handle(

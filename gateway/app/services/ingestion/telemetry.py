@@ -49,15 +49,18 @@ async def handle_telemetry(
         hits = []
 
     async with session_scope() as session:
+        await device_repo.upsert_device(
+            session,
+            device_id=payload.device_id,
+            firmware_version=payload.firmware_version,
+        )
         inserted = False
-        if service.settings.is_proposed and not service.settings.store_raw_readings:
-            inserted = False
-        elif service.settings.store_raw_readings:
-            await device_repo.upsert_device(
-                session,
-                device_id=payload.device_id,
-                firmware_version=payload.firmware_version,
-            )
+        attempted_raw_insert = False
+        decision = service.storage_policy.decide_reading_storage(
+            event_triggering=bool(hits)
+        )
+        if decision.store_raw:
+            attempted_raw_insert = True
             inserted = await reading_repo.insert_reading(
                 session,
                 time=payload.timestamp.astimezone(tz=payload.timestamp.tzinfo)
@@ -71,7 +74,10 @@ async def handle_telemetry(
                 sequence_no=payload.sequence_no,
                 raw_payload=data,
             )
-        if not inserted:
+        else:
+            service.metrics.incr("readings.skipped_by_policy")
+
+        if attempted_raw_insert and not inserted:
             service.metrics.incr("readings.duplicates")
 
         created_events: list[tuple[int, datetime]] = []

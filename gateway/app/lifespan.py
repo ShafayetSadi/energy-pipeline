@@ -22,6 +22,7 @@ def attach_container(app: FastAPI, container: AppContainer) -> None:
     app.state.ingestion = container.ingestion
     app.state.mqtt_worker = container.mqtt_worker
     app.state.heartbeat_worker = container.heartbeat_worker
+    app.state.alert_outbox_worker = container.alert_outbox_worker
     app.state.agg_worker = container.agg_worker
 
 
@@ -32,6 +33,7 @@ def make_lifespan(container: AppContainer):
 
         await container.metrics.start()
         await container.alert_service.start()
+        await container.alert_outbox_worker.start()
         await container.mqtt_worker.start()
         await container.heartbeat_worker.start()
         await container.agg_worker.start()
@@ -49,6 +51,7 @@ def make_lifespan(container: AppContainer):
             await container.agg_worker.stop()
             await container.heartbeat_worker.stop()
             await container.mqtt_worker.stop()
+            await container.alert_outbox_worker.stop()
             await container.alert_service.stop()
             await container.metrics.stop()
             await engine.dispose()

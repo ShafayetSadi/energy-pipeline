@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 
 from ..config import get_settings
-from ..db.models import AlertDelivery
+from ..db.repositories import alert_outbox as outbox_repo
 from ..db.session import session_scope
 from ..logging_config import get_logger
 from .rule_engine import RuleHit
@@ -32,7 +32,7 @@ class AlertMessage:
 
 
 class AlertService:
-    """Dispatches alerts to console and webhook channels with cooldown dedup."""
+    """Applies alert policy and enqueues durable alert delivery work."""
 
     def __init__(self) -> None:
         self._settings = get_settings()
@@ -73,7 +73,7 @@ class AlertService:
         device_id: str | None,
         event_time: datetime,
     ) -> bool:
-        """Send an alert if the rule severity passes policy and is past cooldown."""
+        """Enqueue alert deliveries if severity passes policy and is past cooldown."""
         settings = self._settings
         if not settings.enable_alerts:
             return False
@@ -101,28 +101,124 @@ class AlertService:
             threshold=hit.threshold_value,
         )
 
+        channels = self._configured_channels()
+        if not channels:
+            return False
+
+        if not settings.alert_outbox_enabled:
+            deliveries = await self._send_to_channels(message, channels)
+            await self._record_deliveries(event_id, deliveries)
+            return True
+
+        payload = self._payload(message)
+        try:
+            async with session_scope() as session:
+                for channel in channels:
+                    await outbox_repo.enqueue_alert(
+                        session,
+                        event_id=event_id,
+                        channel=channel,
+                        payload=payload,
+                    )
+        except Exception as exc:
+            logger.warning("alert_outbox_enqueue_failed", event_id=event_id, error=str(exc))
+            return False
+        return True
+
+    def _configured_channels(self) -> list[str]:
+        channels: list[str] = []
+        if self._settings.alert_console_enabled:
+            channels.append("console")
+        if self._settings.alert_webhook_url:
+            channels.append("webhook")
+        if self._settings.alert_slack_webhook_url:
+            channels.append("slack")
+        return channels
+
+    async def deliver_outbox_message(
+        self, channel: str, payload: dict[str, Any]
+    ) -> tuple[str, str | None]:
+        message = AlertMessage(
+            event_id=int(payload["event_id"]),
+            device_id=payload.get("device_id"),
+            event_type=str(payload["event_type"]),
+            severity=str(payload["severity"]),
+            time=datetime.fromisoformat(str(payload["time"])),
+            message=str(payload["message"]),
+            value=payload.get("value"),
+            threshold=payload.get("threshold"),
+        )
+        if channel == "console":
+            logger.warning(
+                "alert_console",
+                event_id=message.event_id,
+                device_id=message.device_id,
+                event_type=message.event_type,
+                severity=message.severity,
+                message=message.message,
+                value=message.value,
+                threshold=message.threshold,
+            )
+            return ("ok", None)
+        if channel == "webhook":
+            return await self._send_webhook(message)
+        if channel == "slack":
+            return await self._send_slack(message)
+        return ("error", f"unknown_channel={channel}")
+
+    def _payload(self, message: AlertMessage) -> dict[str, Any]:
+        return {
+            "event_id": message.event_id,
+            "device_id": message.device_id,
+            "event_type": message.event_type,
+            "severity": message.severity,
+            "time": message.time.isoformat(),
+            "message": message.message,
+            "value": message.value,
+            "threshold": message.threshold,
+        }
+
+    async def _record_deliveries(
+        self, event_id: int, deliveries: list[tuple[str, str, str | None]]
+    ) -> None:
+        if not deliveries:
+            return
+        try:
+            async with session_scope() as session:
+                for channel, status, response in deliveries:
+                    await outbox_repo.record_delivery(
+                        session,
+                        event_id=event_id,
+                        channel=channel,
+                        status=status,
+                        response=response,
+                    )
+        except Exception as exc:
+            logger.warning("alert_delivery_record_failed", error=str(exc))
+
+    async def _send_to_channels(
+        self, message: AlertMessage, channels: list[str]
+    ) -> list[tuple[str, str, str | None]]:
         deliveries: list[tuple[str, str, str | None]] = []
-        if settings.alert_console_enabled:
+        if "console" in channels:
             deliveries.append(("console", "ok", None))
             logger.warning(
                 "alert_console",
-                event_id=event_id,
-                device_id=device_id,
-                event_type=hit.event_type,
-                severity=hit.severity,
-                message=hit.message,
-                value=hit.event_value,
-                threshold=hit.threshold_value,
+                event_id=message.event_id,
+                device_id=message.device_id,
+                event_type=message.event_type,
+                severity=message.severity,
+                message=message.message,
+                value=message.value,
+                threshold=message.threshold,
             )
-        if settings.alert_webhook_url:
+        if "webhook" in channels:
             status, response = await self._send_webhook(message)
             deliveries.append(("webhook", status, response))
-        if settings.alert_slack_webhook_url:
+        if "slack" in channels:
             status, response = await self._send_slack(message)
             deliveries.append(("slack", status, response))
-
-        await self._record_deliveries(event_id, deliveries)
-        return True
+        return deliveries
 
     async def _send_webhook(self, message: AlertMessage) -> tuple[str, str | None]:
         if self._client is None:
@@ -169,22 +265,6 @@ class AlertService:
             )
         except Exception as exc:
             return ("error", f"exception: {exc}")
-
-    async def _record_deliveries(
-        self, event_id: int, deliveries: list[tuple[str, str, str | None]]
-    ) -> None:
-        if not deliveries:
-            return
-        try:
-            async with session_scope() as session:
-                session.add_all(
-                    [
-                        AlertDelivery(event_id=event_id, channel=ch, status=st, response=resp)
-                        for ch, st, resp in deliveries
-                    ]
-                )
-        except Exception as exc:
-            logger.warning("alert_delivery_record_failed", error=str(exc))
 
 
 def event_time_for_storage(value: datetime) -> datetime:

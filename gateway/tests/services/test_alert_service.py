@@ -45,6 +45,7 @@ async def test_slack_delivery_posts_text_payload(monkeypatch: pytest.MonkeyPatch
     service._settings.alert_slack_webhook_url = "https://hooks.slack.test/services/x"
     service._settings.alert_webhook_url = ""
     service._settings.alert_critical_only = True
+    service._settings.alert_outbox_enabled = False
     service._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
     delivered = await service.maybe_alert(
@@ -64,6 +65,7 @@ async def test_slack_delivery_skipped_when_unconfigured() -> None:
     service._settings.alert_slack_webhook_url = ""
     service._settings.alert_webhook_url = ""
     service._settings.alert_critical_only = True
+    service._settings.alert_outbox_enabled = False
 
     delivered = await service.maybe_alert(
         _hit(), event_id=2, device_id="house_0002", event_time=datetime.now(UTC)

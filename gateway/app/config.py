@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     enable_timescale: bool = True
 
     processing_mode: str = "proposed"
+    storage_policy: str = "raw"
     store_raw_readings: bool = True
     enable_rule_engine: bool = True
     enable_aggregation: bool = True
@@ -74,6 +75,18 @@ class Settings(BaseSettings):
     alert_slack_webhook_url: str = ""
     alert_console_enabled: bool = True
     alert_critical_only: bool = True
+    alert_outbox_enabled: bool = True
+    alert_outbox_poll_seconds: int = 5
+    alert_outbox_batch_size: int = 50
+    alert_outbox_max_attempts: int = 5
+
+    retention_enabled: bool = True
+    retention_raw_readings_days: int = 30
+    retention_quality_logs_days: int = 14
+    retention_system_metrics_days: int = 30
+    retention_status_history_days: int = 30
+    retention_alert_deliveries_days: int = 30
+    retention_alert_outbox_days: int = 30
 
     metrics_flush_interval_seconds: int = 10
 
@@ -82,6 +95,15 @@ class Settings(BaseSettings):
     def _validate_mode(cls, value: str) -> str:
         if value not in {"baseline", "proposed"}:
             raise ValueError("processing_mode must be 'baseline' or 'proposed'")
+        return value
+
+    @field_validator("storage_policy")
+    @classmethod
+    def _validate_storage_policy(cls, value: str) -> str:
+        if value not in {"raw", "hybrid", "event_only", "aggregate_only"}:
+            raise ValueError(
+                "storage_policy must be one of: raw, hybrid, event_only, aggregate_only"
+            )
         return value
 
     @field_validator("supported_schema_versions")

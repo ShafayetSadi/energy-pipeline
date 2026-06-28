@@ -7,7 +7,8 @@ directly from [`docs/architecture.md`](docs/architecture.md).
 flowchart LR
     A["Energy node(s)\n(or simulator)"] -->|"MQTT\nenergy/+/telemetry"| B[Mosquitto\nbroker]
     B -->|async pipeline| C["Edge Gateway\n(FastAPI)"]
-    C -->|"validate · rule engine\nalert · aggregate"| D[TimescaleDB]
+    C -->|"validate · rule engine\nstorage policy"| D[TimescaleDB]
+    C -->|"alert outbox"| F["Alert worker\nconsole/webhook/Slack"]
     D --> E[Grafana]
 ```
 
@@ -15,13 +16,14 @@ flowchart LR
 
 - **Edge gateway** — FastAPI, SQLAlchemy 2 (async), `aiomqtt`, Pydantic v2,
   structlog. Subscribes to `energy/+/telemetry`, `energy/+/status`,
-  `energy/+/events`, validates payloads, applies the rule engine, persists
-  to TimescaleDB, and dispatches alerts.
+  `energy/+/events`, validates payloads, applies the rule engine and storage
+  policy, persists to TimescaleDB, and enqueues durable alert deliveries.
 - **MQTT broker** — Eclipse Mosquitto (`config/mosquitto/mosquitto.conf`).
 - **Storage** — TimescaleDB hypertables for `energy_readings`, `events`,
   `system_metrics`, `device_status_history`; continuous aggregate
   `energy_readings_1min` is managed by Alembic migrations under
-  `database/migrations/`.
+  `database/migrations/`. `STORAGE_POLICY` controls proposed-mode raw reading
+  storage, while thesis-safe retention defaults prune raw/operational tables.
 - **Dashboards** — Grafana with four provisioned dashboards
   (`config/grafana/dashboards/`).
 - **Simulator** — `simulator/mqtt_publisher.py` with scenario YAML files
@@ -47,7 +49,7 @@ flowchart LR
 │   │   ├── mqtt/            # aiomqtt client + handlers + topic parser
 │   │   ├── schemas/         # Pydantic v2 payload schemas
 │   │   ├── services/        # validation, rule engine, ingestion, alert, metrics
-│   │   └── workers/         # MQTT consumer, heartbeat, aggregation
+│   │   └── workers/         # MQTT consumer, heartbeat, maintenance, alert outbox
 │   ├── config/rules.yaml
 │   └── tests/               # pytest unit tests
 ├── config/
@@ -158,8 +160,14 @@ Set `PROCESSING_MODE=baseline` or `PROCESSING_MODE=proposed` in `.env`.
 
 - **baseline** — every valid reading is stored; no rule engine runs (this
   matches `Section 14.1` of the architecture doc).
-- **proposed** — validate, run the rule engine, store readings, store events,
-  dispatch alerts (matches `Section 14.2`).
+- **proposed** — validate, run the rule engine, apply `STORAGE_POLICY`, store
+  events, and enqueue async alerts (matches `Section 14.2`).
+
+Storage policy defaults to `raw` to avoid surprising data loss. Supported
+values are `raw`, `hybrid`, `event_only`, and `aggregate_only`; `baseline`
+always stores raw readings. Retention defaults keep raw readings, system
+metrics, status history, alert deliveries, and completed outbox rows for 30
+days, quality logs for 14 days, and events indefinitely.
 
 ## Evaluation (baseline vs proposed)
 
