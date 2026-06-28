@@ -1,7 +1,7 @@
 """SQLAlchemy ORM models. TimescaleDB hypertables are created via raw SQL in migrations."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
@@ -21,6 +21,10 @@ class Base(DeclarativeBase):
     pass
 
 
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 class Device(Base):
     __tablename__ = "devices"
 
@@ -33,12 +37,12 @@ class Device(Base):
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow()
+        DateTime(timezone=True), default=utc_now
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.utcnow(),
-        onupdate=lambda: datetime.utcnow(),
+        default=utc_now,
+        onupdate=utc_now,
     )
 
 
@@ -58,7 +62,7 @@ class EnergyReading(Base):
     sequence_no: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow()
+        DateTime(timezone=True), default=utc_now
     )
 
     __table_args__ = (
@@ -90,7 +94,7 @@ class Event(Base):
     )
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow()
+        DateTime(timezone=True), default=utc_now
     )
 
     __table_args__ = (
@@ -104,7 +108,7 @@ class DataQualityLog(Base):
 
     log_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     time: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow()
+        DateTime(timezone=True), default=utc_now
     )
     topic: Mapped[str | None] = mapped_column(Text, nullable=True)
     device_id: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -112,7 +116,7 @@ class DataQualityLog(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow()
+        DateTime(timezone=True), default=utc_now
     )
 
 
@@ -132,7 +136,7 @@ class DeviceStatusHistory(Base):
         "metadata", JSON, nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow()
+        DateTime(timezone=True), default=utc_now
     )
 
 
@@ -146,7 +150,7 @@ class SystemMetric(Base):
     metric_value: Mapped[float] = mapped_column(Float, nullable=False)
     labels: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow()
+        DateTime(timezone=True), default=utc_now
     )
 
 
@@ -159,12 +163,12 @@ class RuleDefinition(Base):
     severity: Mapped[str] = mapped_column(Text, nullable=False)
     config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow()
+        DateTime(timezone=True), default=utc_now
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.utcnow(),
-        onupdate=lambda: datetime.utcnow(),
+        default=utc_now,
+        onupdate=utc_now,
     )
 
 
@@ -179,7 +183,7 @@ class AlertDelivery(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False)
     response: Mapped[str | None] = mapped_column(Text, nullable=True)
     sent_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow()
+        DateTime(timezone=True), default=utc_now
     )
 
 
@@ -206,5 +210,5 @@ class ModelPrediction(Base):
         "metadata", JSON, nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.utcnow()
+        DateTime(timezone=True), default=utc_now
     )

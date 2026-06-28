@@ -9,7 +9,7 @@ lint:
 	uv run ruff check .
 
 typecheck:
-	uv run mypy gateway
+	uv run ty check gateway
 
 up:
 	docker compose up -d timescaledb mosquitto grafana

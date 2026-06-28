@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from ...db.repositories import devices as device_repo
@@ -41,7 +41,7 @@ async def handle_telemetry(
     service.metrics.incr("validation.telemetry.success")
     service.metrics.incr("messages.telemetry")
     payload: TelemetryPayload = result.payload
-    gateway_received_at = datetime.utcnow()
+    gateway_received_at = datetime.now(UTC)
 
     if service.settings.is_proposed and service.settings.enable_rule_engine:
         hits = await service.rule_engine.evaluate(payload, received_at)
