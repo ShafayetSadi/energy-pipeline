@@ -1,52 +1,399 @@
 {
   "uid": "event-timeline",
   "title": "Event Timeline",
-  "tags": ["energy", "events"],
+  "tags": [
+    "energy",
+    "events"
+  ],
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "10s",
-  "time": { "from": "now-6h", "to": "now" },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "name": "severity",
+        "type": "custom",
+        "query": "ALL,CRITICAL,WARNING,INFO",
+        "current": {
+          "text": "ALL",
+          "value": "ALL"
+        },
+        "includeAll": false
+      },
+      {
+        "name": "event_type",
+        "type": "query",
+        "datasource": {
+          "type": "postgres",
+          "uid": "TimescaleDB"
+        },
+        "query": "SELECT 'ALL' AS event_type UNION SELECT DISTINCT event_type FROM events ORDER BY 1",
+        "refresh": 2,
+        "includeAll": false,
+        "current": {
+          "text": "ALL",
+          "value": "ALL"
+        }
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
-      "type": "table",
-      "title": "Recent events",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 12 },
-      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "type": "stat",
+      "title": "Critical events",
+      "description": "Critical events in the selected time range.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
       "targets": [
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT time, device_id, event_type, severity, rule_name, message FROM events WHERE time > now() - interval '6 hours' ORDER BY time DESC LIMIT 100"
+          "rawSql": "SELECT count(*)::int AS value FROM events WHERE severity='CRITICAL' AND $__timeFilter(time)"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
     },
     {
       "id": 2,
-      "type": "timeseries",
-      "title": "Events by type (1m buckets)",
-      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
-      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "type": "stat",
+      "title": "Warnings",
+      "description": "Warning events in the selected time range.",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
       "targets": [
         {
           "refId": "A",
-          "format": "time_series",
-          "rawSql": "SELECT $__time(time), event_type, count(*) FROM events WHERE time > now() - interval '6 hours' GROUP BY 1, 2 ORDER BY 1"
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS value FROM events WHERE severity='WARNING' AND $__timeFilter(time)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Affected devices",
+      "description": "Distinct devices with events in the selected time range.",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(DISTINCT device_id)::int AS value FROM events WHERE $__timeFilter(time)"
         }
       ]
     },
     {
-      "id": 3,
+      "id": 4,
+      "type": "stat",
+      "title": "Unacknowledged events",
+      "description": "Events that have not been acknowledged by an operator.",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS value FROM events WHERE acknowledged = false AND $__timeFilter(time)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Most common event",
+      "description": "Most frequently detected event type in the selected time range.",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT coalesce((SELECT event_type FROM events WHERE $__timeFilter(time) GROUP BY event_type ORDER BY count(*) DESC LIMIT 1), 'none') AS value"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Latest event age",
+      "description": "Minutes since the newest event in the selected time range.",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT coalesce(round((extract(epoch from (now() - max(time))) / 60.0)::numeric, 2), 0) AS value FROM events WHERE $__timeFilter(time)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Recent events with rule context",
+      "description": "Newest events. Use the filters above to focus by severity or event type.",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT time, device_id, event_type, severity, rule_name, round(event_value::numeric, 2) AS event_value, round(threshold_value::numeric, 2) AS threshold_value, acknowledged, message FROM events WHERE $__timeFilter(time) AND ('$severity' = 'ALL' OR severity = '$severity') AND ('$event_type' = 'ALL' OR event_type = '$event_type') ORDER BY time DESC LIMIT 100"
+        }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "severity"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "message"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 420
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 8,
       "type": "timeseries",
-      "title": "Events by severity (1m buckets)",
-      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
-      "datasource": { "type": "postgres", "uid": "TimescaleDB" },
+      "title": "Events by type per minute",
+      "description": "Real one-minute event buckets grouped by event type.",
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
       "targets": [
         {
           "refId": "A",
           "format": "time_series",
-          "rawSql": "SELECT $__time(time), severity, count(*) FROM events WHERE time > now() - interval '6 hours' GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT $__timeGroup(time, '1m') AS time, event_type AS metric, count(*) AS value FROM events WHERE $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Events by severity per minute",
+      "description": "Real one-minute event buckets grouped by severity.",
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroup(time, '1m') AS time, severity AS metric, count(*) AS value FROM events WHERE $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Top affected devices",
+      "description": "Devices with the most events in the selected time range.",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT device_id, count(*)::int AS events, count(*) FILTER (WHERE severity='CRITICAL')::int AS critical, count(*) FILTER (WHERE severity='WARNING')::int AS warning, max(time) AS latest_event FROM events WHERE $__timeFilter(time) GROUP BY device_id ORDER BY events DESC, latest_event DESC LIMIT 20"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Event type summary",
+      "description": "Event counts by type and severity.",
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT event_type, severity, count(*)::int AS events, count(DISTINCT device_id)::int AS affected_devices, max(time) AS latest_event FROM events WHERE $__timeFilter(time) GROUP BY event_type, severity ORDER BY events DESC, event_type"
         }
       ]
     }

@@ -6,7 +6,7 @@
     "observability"
   ],
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "10s",
   "time": {
     "from": "now-30m",
@@ -16,13 +16,14 @@
   "panels": [
     {
       "id": 1,
-      "type": "timeseries",
-      "title": "Messages received per minute",
+      "type": "stat",
+      "title": "Gateway uptime",
+      "description": "Approximate gateway uptime inferred from the first persisted metric sample.",
       "gridPos": {
         "x": 0,
         "y": 0,
-        "w": 12,
-        "h": 8
+        "w": 4,
+        "h": 4
       },
       "datasource": {
         "type": "postgres",
@@ -31,20 +32,26 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT $__time(time), metric_value FROM system_metrics WHERE metric_name='counter.messages.received' AND time > now() - interval '30 minutes' ORDER BY 1",
-          "format": "time_series"
+          "rawSql": "SELECT coalesce(round((extract(epoch from (now() - min(time))) / 60.0)::numeric, 2), 0) AS value FROM system_metrics",
+          "format": "table"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m"
+        }
+      }
     },
     {
       "id": 2,
-      "type": "timeseries",
-      "title": "Validation failures per minute",
+      "type": "stat",
+      "title": "Latest message count",
+      "description": "Latest cumulative MQTT messages received by the gateway.",
       "gridPos": {
-        "x": 12,
+        "x": 4,
         "y": 0,
-        "w": 12,
-        "h": 8
+        "w": 4,
+        "h": 4
       },
       "datasource": {
         "type": "postgres",
@@ -53,20 +60,21 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT $__time(time), metric_value FROM system_metrics WHERE metric_name='counter.validation.failures' AND time > now() - interval '30 minutes' ORDER BY 1",
-          "format": "time_series"
+          "rawSql": "SELECT coalesce((SELECT metric_value FROM system_metrics WHERE metric_name='counter.messages.received' ORDER BY time DESC LIMIT 1), 0) AS value",
+          "format": "table"
         }
       ]
     },
     {
       "id": 3,
-      "type": "timeseries",
-      "title": "Telemetry p95 latency (ms)",
+      "type": "stat",
+      "title": "Latest stored readings",
+      "description": "Latest cumulative readings stored counter.",
       "gridPos": {
-        "x": 0,
-        "y": 8,
-        "w": 12,
-        "h": 8
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
       },
       "datasource": {
         "type": "postgres",
@@ -75,18 +83,145 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT $__time(time), metric_value FROM system_metrics WHERE metric_name='latency.telemetry.p95_ms' AND time > now() - interval '30 minutes' ORDER BY 1",
-          "format": "time_series"
+          "rawSql": "SELECT coalesce((SELECT metric_value FROM system_metrics WHERE metric_name='counter.readings.stored' ORDER BY time DESC LIMIT 1), 0) AS value",
+          "format": "table"
         }
       ]
     },
     {
       "id": 4,
-      "type": "timeseries",
-      "title": "Readings stored per minute",
+      "type": "stat",
+      "title": "Latest validation failures",
+      "description": "Latest cumulative validation failure counter.",
       "gridPos": {
         "x": 12,
-        "y": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT coalesce((SELECT metric_value FROM system_metrics WHERE metric_name='counter.validation.failures' ORDER BY time DESC LIMIT 1), 0) AS value",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Latest telemetry p95",
+      "description": "Latest telemetry p95 processing latency.",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT coalesce((SELECT metric_value FROM system_metrics WHERE metric_name='latency.telemetry.p95_ms' ORDER BY time DESC LIMIT 1), 0) AS value",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Alert outbox pending",
+      "description": "Pending alert deliveries waiting in the outbox.",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT count(*)::int AS value FROM alert_outbox WHERE status='pending'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Message rate per minute",
+      "description": "Per-minute rate derived from cumulative counter deltas.",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
         "w": 12,
         "h": 8
       },
@@ -97,8 +232,144 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT $__time(time), metric_value FROM system_metrics WHERE metric_name='counter.readings.stored' AND time > now() - interval '30 minutes' ORDER BY 1",
+          "rawSql": "WITH points AS (SELECT time, metric_value, lag(metric_value) OVER (ORDER BY time) AS previous_value, lag(time) OVER (ORDER BY time) AS previous_time FROM system_metrics WHERE metric_name='counter.messages.received' AND $__timeFilter(time)) SELECT $__time(time), greatest(metric_value - previous_value, 0) / greatest(extract(epoch from time - previous_time), 1) * 60.0 AS messages_per_minute FROM points WHERE previous_value IS NOT NULL ORDER BY 1",
           "format": "time_series"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Readings stored rate per minute",
+      "description": "Per-minute stored-reading rate derived from cumulative counter deltas.",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "WITH points AS (SELECT time, metric_value, lag(metric_value) OVER (ORDER BY time) AS previous_value, lag(time) OVER (ORDER BY time) AS previous_time FROM system_metrics WHERE metric_name='counter.readings.stored' AND $__timeFilter(time)) SELECT $__time(time), greatest(metric_value - previous_value, 0) / greatest(extract(epoch from time - previous_time), 1) * 60.0 AS readings_per_minute FROM points WHERE previous_value IS NOT NULL ORDER BY 1",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Validation failure rate per minute",
+      "description": "Per-minute validation failure rate derived from cumulative counter deltas.",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "WITH points AS (SELECT time, metric_value, lag(metric_value) OVER (ORDER BY time) AS previous_value, lag(time) OVER (ORDER BY time) AS previous_time FROM system_metrics WHERE metric_name='counter.validation.failures' AND $__timeFilter(time)) SELECT $__time(time), greatest(metric_value - previous_value, 0) / greatest(extract(epoch from time - previous_time), 1) * 60.0 AS failures_per_minute FROM points WHERE previous_value IS NOT NULL ORDER BY 1",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Telemetry latency percentiles",
+      "description": "Average, p50, p95, and p99 telemetry processing latency.",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), replace(metric_name, 'latency.telemetry.', '') AS metric, metric_value AS value FROM system_metrics WHERE metric_name IN ('latency.telemetry.avg_ms', 'latency.telemetry.p50_ms', 'latency.telemetry.p95_ms', 'latency.telemetry.p99_ms') AND $__timeFilter(time) ORDER BY 1",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Validation failures by type",
+      "description": "Data-quality errors recorded during the selected time range.",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT error_type, count(*)::int AS failures, count(DISTINCT device_id)::int AS affected_devices, max(time) AS latest_failure FROM data_quality_logs WHERE $__timeFilter(time) GROUP BY error_type ORDER BY failures DESC"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Alert outbox status",
+      "description": "Alert delivery queue status by channel.",
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT channel, status, count(*)::int AS deliveries, max(updated_at) AS latest_update FROM alert_outbox GROUP BY channel, status ORDER BY deliveries DESC, channel, status"
         }
       ]
     }

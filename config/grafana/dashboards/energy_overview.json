@@ -6,7 +6,7 @@
     "overview"
   ],
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "10s",
   "time": {
     "from": "now-6h",
@@ -17,7 +17,8 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Active devices",
+      "title": "Devices seen in selected window",
+      "description": "Distinct devices that produced readings during the selected Grafana time range.",
       "gridPos": {
         "x": 0,
         "y": 0,
@@ -31,7 +32,7 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT count(*)::int AS value FROM devices WHERE status IN ('online','unknown')",
+          "rawSql": "SELECT count(DISTINCT device_id)::int AS value FROM energy_readings WHERE $__timeFilter(time)",
           "format": "table"
         }
       ],
@@ -41,13 +42,31 @@
             "lastNotNull"
           ]
         },
-        "colorMode": "value"
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red"
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        }
       }
     },
     {
       "id": 2,
       "type": "stat",
-      "title": "Readings (last 1h)",
+      "title": "Readings stored in selected window",
+      "description": "Accepted telemetry rows written to TimescaleDB during the selected Grafana time range.",
       "gridPos": {
         "x": 4,
         "y": 0,
@@ -61,7 +80,7 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT count(*)::int AS value FROM energy_readings WHERE time > now() - interval '1 hour'",
+          "rawSql": "SELECT count(*)::int AS value FROM energy_readings WHERE $__timeFilter(time)",
           "format": "table"
         }
       ],
@@ -71,13 +90,15 @@
             "lastNotNull"
           ]
         },
-        "colorMode": "value"
+        "colorMode": "value",
+        "graphMode": "none"
       }
     },
     {
       "id": 3,
       "type": "stat",
-      "title": "Critical events (24h)",
+      "title": "Latest total load",
+      "description": "Sum of the latest power reading per device in the selected time range.",
       "gridPos": {
         "x": 8,
         "y": 0,
@@ -91,10 +112,125 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT count(*)::int AS value FROM events WHERE severity='CRITICAL' AND time > now() - interval '24 hours'",
+          "rawSql": "WITH latest AS (SELECT DISTINCT ON (device_id) device_id, power_w FROM energy_readings WHERE $__timeFilter(time) ORDER BY device_id, time DESC) SELECT coalesce(round(sum(power_w)::numeric, 2), 0) AS value FROM latest",
           "format": "table"
         }
       ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 5000
+              },
+              {
+                "color": "red",
+                "value": 10000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Average voltage",
+      "description": "Average accepted voltage in the selected time range.",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT coalesce(round(avg(voltage_v)::numeric, 2), 0) AS value FROM energy_readings WHERE $__timeFilter(time)",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "volt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red"
+              },
+              {
+                "color": "green",
+                "value": 210
+              },
+              {
+                "color": "yellow",
+                "value": 240
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Critical events",
+      "description": "Critical events detected during the selected time range.",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT count(*)::int AS value FROM events WHERE severity='CRITICAL' AND $__timeFilter(time)",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
       "fieldConfig": {
         "defaults": {
           "thresholds": {
@@ -113,11 +249,12 @@
       }
     },
     {
-      "id": 4,
+      "id": 6,
       "type": "stat",
-      "title": "Warnings (24h)",
+      "title": "Warnings",
+      "description": "Warning events detected during the selected time range.",
       "gridPos": {
-        "x": 12,
+        "x": 20,
         "y": 0,
         "w": 4,
         "h": 4
@@ -129,15 +266,41 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT count(*)::int AS value FROM events WHERE severity='WARNING' AND time > now() - interval '24 hours'",
+          "rawSql": "SELECT count(*)::int AS value FROM events WHERE severity='WARNING' AND $__timeFilter(time)",
           "format": "table"
         }
-      ]
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
     },
     {
-      "id": 5,
-      "type": "table",
-      "title": "Latest power per device (W)",
+      "id": 7,
+      "type": "timeseries",
+      "title": "Total load over time",
+      "description": "One-minute total power trend across all devices.",
       "gridPos": {
         "x": 0,
         "y": 4,
@@ -151,15 +314,21 @@
       "targets": [
         {
           "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT DISTINCT ON (device_id) device_id, time AS last_seen, round(power_w::numeric, 2) AS power_w FROM energy_readings WHERE $__timeFilter(time) ORDER BY device_id, time DESC"
+          "rawSql": "SELECT $__timeGroup(time, '1m') AS time, avg(power_w) AS avg_power_w FROM energy_readings WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1",
+          "format": "time_series"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt"
+        }
+      }
     },
     {
-      "id": 6,
-      "type": "table",
-      "title": "Latest voltage per device (V)",
+      "id": 8,
+      "type": "timeseries",
+      "title": "Events by severity",
+      "description": "Stacked one-minute event counts grouped by severity.",
       "gridPos": {
         "x": 12,
         "y": 4,
@@ -173,8 +342,64 @@
       "targets": [
         {
           "refId": "A",
+          "rawSql": "SELECT $__timeGroup(time, '1m') AS time, severity AS metric, count(*) AS value FROM events WHERE $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Latest reading per device",
+      "description": "Latest measurement for each device in the selected time range.",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 14,
+        "h": 9
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
           "format": "table",
-          "rawSql": "SELECT DISTINCT ON (device_id) device_id, time AS last_seen, round(voltage_v::numeric, 2) AS voltage_v FROM energy_readings WHERE $__timeFilter(time) ORDER BY device_id, time DESC"
+          "rawSql": "SELECT DISTINCT ON (device_id) device_id, time AS last_seen, round(voltage_v::numeric, 2) AS voltage_v, round(current_a::numeric, 2) AS current_a, round(power_w::numeric, 2) AS power_w, round(temperature_c::numeric, 2) AS temperature_c FROM energy_readings WHERE $__timeFilter(time) ORDER BY device_id, time DESC"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Event summary by type",
+      "description": "Event counts and affected devices in the selected time range.",
+      "gridPos": {
+        "x": 14,
+        "y": 12,
+        "w": 10,
+        "h": 9
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT event_type, severity, count(*)::int AS events, count(DISTINCT device_id)::int AS affected_devices FROM events WHERE $__timeFilter(time) GROUP BY event_type, severity ORDER BY events DESC, severity, event_type"
         }
       ]
     }

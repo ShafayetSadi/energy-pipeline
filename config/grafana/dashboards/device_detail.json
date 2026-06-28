@@ -6,7 +6,7 @@
     "device"
   ],
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "10s",
   "time": {
     "from": "now-1h",
@@ -31,13 +31,14 @@
   "panels": [
     {
       "id": 1,
-      "type": "timeseries",
-      "title": "Voltage (V)",
+      "type": "stat",
+      "title": "Latest status",
+      "description": "Most recent status message for the selected device.",
       "gridPos": {
         "x": 0,
         "y": 0,
-        "w": 12,
-        "h": 8
+        "w": 4,
+        "h": 4
       },
       "datasource": {
         "type": "postgres",
@@ -46,20 +47,30 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT $__time(time), voltage_v FROM energy_readings WHERE device_id = '$device_id' AND time > now() - interval '1 hour' ORDER BY 1",
-          "format": "time_series"
+          "rawSql": "SELECT coalesce((SELECT status FROM device_status_history WHERE device_id = '$device_id' ORDER BY time DESC LIMIT 1), (SELECT status FROM devices WHERE device_id = '$device_id'), 'unknown') AS value",
+          "format": "table"
         }
-      ]
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
     },
     {
       "id": 2,
-      "type": "timeseries",
-      "title": "Current (A)",
+      "type": "stat",
+      "title": "Minutes since last reading",
+      "description": "Freshness of telemetry for the selected device.",
       "gridPos": {
-        "x": 12,
+        "x": 4,
         "y": 0,
-        "w": 12,
-        "h": 8
+        "w": 4,
+        "h": 4
       },
       "datasource": {
         "type": "postgres",
@@ -68,18 +79,215 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT $__time(time), current_a FROM energy_readings WHERE device_id = '$device_id' AND time > now() - interval '1 hour' ORDER BY 1",
-          "format": "time_series"
+          "rawSql": "SELECT coalesce(round((extract(epoch from (now() - max(time))) / 60.0)::numeric, 2), 0) AS value FROM energy_readings WHERE device_id = '$device_id'",
+          "format": "table"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
     },
     {
       "id": 3,
+      "type": "stat",
+      "title": "Events in selected window",
+      "description": "Events generated for this device during the selected time range.",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT count(*)::int AS value FROM events WHERE device_id = '$device_id' AND $__timeFilter(time)",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Latest power",
+      "description": "Most recent power reading for this device.",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT coalesce((SELECT round(power_w::numeric, 2) FROM energy_readings WHERE device_id = '$device_id' ORDER BY time DESC LIMIT 1), 0) AS value",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 2500
+              },
+              {
+                "color": "red",
+                "value": 4000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Latest voltage",
+      "description": "Most recent voltage reading for this device.",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT coalesce((SELECT round(voltage_v::numeric, 2) FROM energy_readings WHERE device_id = '$device_id' ORDER BY time DESC LIMIT 1), 0) AS value",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "volt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red"
+              },
+              {
+                "color": "green",
+                "value": 210
+              },
+              {
+                "color": "yellow",
+                "value": 240
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Latest current",
+      "description": "Most recent current reading for this device.",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT coalesce((SELECT round(current_a::numeric, 2) FROM energy_readings WHERE device_id = '$device_id' ORDER BY time DESC LIMIT 1), 0) AS value",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "amp",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 12
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
       "type": "timeseries",
-      "title": "Power (W)",
+      "title": "Voltage with rule thresholds",
+      "description": "Voltage trend with low/high threshold guide lines.",
       "gridPos": {
         "x": 0,
-        "y": 8,
+        "y": 4,
         "w": 12,
         "h": 8
       },
@@ -90,20 +298,198 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT $__time(time), power_w FROM energy_readings WHERE device_id = '$device_id' AND time > now() - interval '1 hour' ORDER BY 1",
+          "rawSql": "SELECT $__time(time), voltage_v FROM energy_readings WHERE device_id = '$device_id' AND $__timeFilter(time) ORDER BY 1",
           "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "volt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red"
+              },
+              {
+                "color": "green",
+                "value": 210
+              },
+              {
+                "color": "yellow",
+                "value": 240
+              }
+            ]
+          },
+          "custom": {
+            "showPoints": "never"
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Current with overload threshold",
+      "description": "Current trend. Values above 10 A are treated as overload candidates in the synthetic rules.",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), current_a FROM energy_readings WHERE device_id = '$device_id' AND $__timeFilter(time) ORDER BY 1",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "amp",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 12
+              }
+            ]
+          },
+          "custom": {
+            "showPoints": "never"
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Power with event markers",
+      "description": "Power trend with event occurrences overlaid as points. Event marker values use event_value when present.",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), power_w AS power_w FROM energy_readings WHERE device_id = '$device_id' AND $__timeFilter(time) ORDER BY 1",
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "rawSql": "SELECT $__time(time), event_type AS metric, coalesce(event_value, 0) AS value FROM events WHERE device_id = '$device_id' AND $__timeFilter(time) ORDER BY 1",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*POWER_SPIKE|.*OVERLOAD|.*DEVICE_FAILURE|.*UNDER_VOLTAGE|.*OVER_VOLTAGE|.*VOLTAGE_ANOMALY"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "points"
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "always"
+              },
+              {
+                "id": "custom.pointSize",
+                "value": 8
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Temperature",
+      "description": "Temperature trend for the selected device.",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT $__time(time), temperature_c FROM energy_readings WHERE device_id = '$device_id' AND $__timeFilter(time) ORDER BY 1",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Device events in selected window",
+      "description": "Rule events for this device, ordered newest first.",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 14,
+        "h": 9
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT time, event_type, severity, rule_name, round(event_value::numeric, 2) AS event_value, round(threshold_value::numeric, 2) AS threshold_value, message FROM events WHERE device_id = '$device_id' AND $__timeFilter(time) ORDER BY time DESC LIMIT 100"
         }
       ]
     },
     {
-      "id": 4,
-      "type": "timeseries",
-      "title": "Temperature (C)",
+      "id": 12,
+      "type": "table",
+      "title": "Device status history",
+      "description": "Recent status messages and signal data for the selected device.",
       "gridPos": {
-        "x": 12,
-        "y": 8,
-        "w": 12,
-        "h": 8
+        "x": 14,
+        "y": 20,
+        "w": 10,
+        "h": 9
       },
       "datasource": {
         "type": "postgres",
@@ -112,8 +498,8 @@
       "targets": [
         {
           "refId": "A",
-          "rawSql": "SELECT $__time(time), temperature_c FROM energy_readings WHERE device_id = '$device_id' AND time > now() - interval '1 hour' ORDER BY 1",
-          "format": "time_series"
+          "format": "table",
+          "rawSql": "SELECT time, status, firmware_version, ip_address, rssi_dbm FROM device_status_history WHERE device_id = '$device_id' AND $__timeFilter(time) ORDER BY time DESC LIMIT 100"
         }
       ]
     }

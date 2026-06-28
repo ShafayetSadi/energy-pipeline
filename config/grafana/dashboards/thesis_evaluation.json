@@ -1,0 +1,169 @@
+{
+  "uid": "thesis-evaluation",
+  "title": "Thesis Evaluation",
+  "tags": [
+    "energy",
+    "thesis",
+    "evaluation"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Evaluation claim",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "The thesis evaluation compares a baseline raw-ingestion gateway against the proposed event-driven edge gateway. The measured result is that proposed mode adds rule-based event intelligence with a small latency overhead while preserving approximately 200 messages per second simulator throughput."
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Clean high-throughput A/B summary",
+      "description": "Averages from the three clean A/B repetitions stored in results/ab/high_throughput.",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT * FROM (VALUES ('Baseline', 199.61, 24731.67, 23501.33, 4.11, 5.52, 136.67, 0.00), ('Proposed', 199.60, 24744.33, 23472.33, 4.43, 6.29, 3980.67, 5948.00)) AS t(mode, simulator_msg_s, messages_received_avg, readings_stored_avg, telemetry_avg_ms, telemetry_p99_ms, critical_events_avg, warning_events_avg)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "Telemetry latency overhead",
+      "description": "Baseline vs proposed telemetry latency from clean high-throughput A/B averages.",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT * FROM (VALUES ('avg_ms', 4.11, 4.43), ('p95_ms', 4.97, 5.56), ('p99_ms', 5.52, 6.29)) AS t(metric, baseline, proposed)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Proposed anomaly detection evidence",
+      "description": "Event counts from the proposed-mode anomaly detection run.",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT * FROM (VALUES ('OVERLOAD', 'CRITICAL', 284), ('DEVICE_FAILURE', 'CRITICAL', 12), ('POWER_SPIKE', 'WARNING', 430), ('UNDER_VOLTAGE', 'WARNING', 31), ('OVER_VOLTAGE', 'WARNING', 14), ('VOLTAGE_ANOMALY', 'INFO', 31)) AS t(event_type, severity, observed_count) ORDER BY observed_count DESC"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Current live event evidence",
+      "description": "Current database event evidence for the selected time range.",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT event_type, severity, count(*)::int AS events, count(DISTINCT device_id)::int AS affected_devices FROM events WHERE $__timeFilter(time) GROUP BY event_type, severity ORDER BY events DESC, event_type"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Database size observation",
+      "description": "Database growth from the clean A/B run. This is a storage-cost observation, not a storage-reduction claim.",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "TimescaleDB"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT * FROM (VALUES ('Baseline', 9.94, 21.84, 11.89), ('Proposed', 9.96, 25.90, 15.94)) AS t(mode, avg_before_mb, avg_after_mb, avg_growth_mb)"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "text",
+      "title": "Interpretation boundaries",
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 7
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Supported: low-latency MQTT ingestion, rule-based event detection, validation behavior, and observable gateway metrics. Not supported by these tests: ML anomaly detection, storage reduction, certified metering accuracy, long-term production reliability, or hardware-field performance."
+      }
+    }
+  ]
+}
