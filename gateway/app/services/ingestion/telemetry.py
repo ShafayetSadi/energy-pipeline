@@ -50,14 +50,29 @@ async def handle_telemetry(
     else:
         hits = []
 
+    reading_time = (
+        payload.timestamp
+        if payload.timestamp.tzinfo
+        else payload.timestamp.replace(tzinfo=gateway_received_at.tzinfo)
+    )
+
     # Edge ML anomaly scoring (Phase 1: Isolation Forest). Independent of the
     # rule engine so the A/B harness can run rules-only, ml-only, or hybrid.
+    # When async scoring is enabled the reading is handed to the micro-batch
+    # worker (keeping ML off the ingestion hot path); otherwise it is scored
+    # inline here. ``ml_result`` is only set for the inline path, which is the
+    # only path that writes the prediction row in this transaction.
     ml_result = None
-    if (
+    ml_enabled = (
         service.settings.is_proposed
         and service.settings.enable_ml
         and service.anomaly_detector.available
-    ):
+    )
+    if ml_enabled and service.settings.ml_async_scoring and service.ml_scoring_worker:
+        service.ml_scoring_worker.enqueue_reading(
+            payload, reading_time, rule_fired=bool(hits)
+        )
+    elif ml_enabled:
         ml_start = time.monotonic()
         ml_result = service.anomaly_detector.score(payload)
         service.metrics.record_latency(
@@ -132,11 +147,6 @@ async def handle_telemetry(
             service.metrics.incr("readings.duplicates")
 
         if ml_result is not None:
-            reading_time = (
-                payload.timestamp
-                if payload.timestamp.tzinfo
-                else payload.timestamp.replace(tzinfo=gateway_received_at.tzinfo)
-            )
             await prediction_repo.insert_prediction(
                 session,
                 time=reading_time,

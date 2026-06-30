@@ -1,0 +1,6 @@
+ predicted_label | count 
+-----------------+-------
+ anomaly         |    94
+ normal          |  1281
+(2 rows)
+

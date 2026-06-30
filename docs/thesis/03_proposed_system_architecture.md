@@ -281,6 +281,14 @@ score and label are written to `model_predictions` for every reading; when
 event emission is enabled, a flagged reading also raises an `ML_ANOMALY` event
 through the same storage and alert path as a rule hit.
 
+To keep machine-learning inference off the ingestion hot path, scoring runs in
+an asynchronous micro-batch worker: the telemetry handler enqueues each reading
+and returns immediately, and the worker scores readings in batches. This is
+both a latency optimization (scikit-learn is far cheaper per reading when
+scoring a batch than one sample at a time) and a structural stepping stone
+toward the score-gated cloud escalation of a later phase, which consumes the
+same queue.
+
 The detector is independent of the rule engine, which lets the evaluation run
 three configurations — **rules-only**, **ml-only**, and **hybrid** — and
 compare detection quality and processing overhead directly. It also degrades

@@ -72,6 +72,7 @@ services:
       ENABLE_ALERTS: ${ENABLE_ALERTS:-true}
       ENABLE_ML: ${ENABLE_ML:-false}
       ML_EMIT_EVENTS: ${ML_EMIT_EVENTS:-false}
+      ML_ASYNC_SCORING: ${ML_ASYNC_SCORING:-true}
       ML_MODEL_PATH: ${ML_MODEL_PATH:-/app/models/anomaly_iforest.joblib}
     ports:
       - "8001:8000"

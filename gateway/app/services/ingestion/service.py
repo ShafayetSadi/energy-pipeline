@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 from ...config import get_settings
 from ...db.repositories import quality as quality_repo
@@ -18,6 +19,9 @@ from .helpers import safe_text
 from .status import handle_status
 from .telemetry import handle_telemetry
 
+if TYPE_CHECKING:
+    from ...workers.ml_scoring import MLScoringWorker
+
 logger = get_logger(__name__)
 
 
@@ -33,6 +37,7 @@ class IngestionService:
         alert_service: AlertService,
         metrics: MetricsService,
         storage_policy: StoragePolicyService,
+        ml_scoring_worker: MLScoringWorker | None = None,
     ) -> None:
         self.validator = validator
         self.rule_engine = rule_engine
@@ -40,6 +45,7 @@ class IngestionService:
         self.alert_service = alert_service
         self.metrics = metrics
         self.storage_policy = storage_policy
+        self.ml_scoring_worker = ml_scoring_worker
         self.settings = get_settings()
 
     async def handle(

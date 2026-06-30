@@ -167,3 +167,44 @@ class AnomalyDetector:
             model_version=self._version,
             threshold=self._threshold,
         )
+
+    def score_many(
+        self, readings: list[TelemetryPayload]
+    ) -> list[AnomalyResult | None]:
+        """Score a batch of readings in a single model call.
+
+        scikit-learn is optimised for batched inference, so scoring N readings
+        at once is far cheaper per reading than N single-sample calls. Readings
+        missing a required feature score ``None`` and keep their slot so the
+        result list aligns with the input list.
+        """
+        if not self.available or not readings:
+            return [None] * len(readings)
+        vectors: list[list[float]] = []
+        index_map: list[int] = []
+        for i, reading in enumerate(readings):
+            vec = self._feature_vector(reading)
+            if vec is None:
+                continue
+            vectors.append(self._apply_engineering(vec))
+            index_map.append(i)
+        results: list[AnomalyResult | None] = [None] * len(readings)
+        if not vectors:
+            return results
+        try:
+            x: Any = vectors
+            if self._scaler is not None:
+                x = self._scaler.transform(vectors)
+            scores = -self._model.score_samples(x)
+        except Exception as exc:  # pragma: no cover - runtime scoring guard
+            logger.warning("ml_score_batch_failed", error=str(exc))
+            return results
+        for slot, score in zip(index_map, scores, strict=True):
+            anomaly_score = float(score)
+            results[slot] = AnomalyResult(
+                anomaly_score=anomaly_score,
+                is_anomaly=anomaly_score > self._threshold,
+                model_version=self._version,
+                threshold=self._threshold,
+            )
+        return results

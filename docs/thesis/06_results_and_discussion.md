@@ -235,12 +235,75 @@ hard bound violations, while the model adds value for envelope and
 consistency anomalies and avoids the over-sensitivity of a fixed current
 threshold.
 
-The online detection A/B (`scripts/run_detection_ab_test.sh`), which measures
-the operational cost of ML scoring in the live gateway (latency, event counts,
-and database growth across rules-only, ml-only, and hybrid modes), is defined
-in Section 5.5 and is pending a run; its results will be added here once
-collected. It should be reported separately from the offline detection quality
-above.
+### 6.7.1 Online detection A/B (operational cost)
+
+The online A/B (`scripts/run_detection_ab_test.sh`) ran the same labeled
+anomaly scenarios (undervoltage, overload, power_spike) in three live gateway
+configurations. It measures the *operational cost* of ML scoring, separate from
+the offline detection-quality result above. The three modes processed a
+comparable input volume (1,375–1,379 telemetry messages); small differences and
+the per-mode event counts reflect the random component of the scenarios and so
+should be read as indicative rather than exact like-for-like.
+
+**Processing latency.** This was the headline operational finding of the first
+run, in which scoring was performed *inline* (synchronously, one reading at a
+time) in the ingestion path:
+
+| Mode (inline scoring) | Telemetry avg | Telemetry p99 | ML inference avg | ML inference p99 |
+| --- | ---: | ---: | ---: | ---: |
+| rules | 6.72 ms | 9.71 ms | – | – |
+| ml | 19.30 ms | 24.98 ms | 11.85 ms | 16.28 ms |
+| hybrid | 19.63 ms | 24.83 ms | 11.90 ms | 16.50 ms |
+
+Inline ML scoring added roughly +12.6 ms average and +15 ms p99 to telemetry
+processing, dominated by the per-sample `ml_inference` cost (~11.9 ms average).
+This is much larger than the sub-millisecond overhead of rule evaluation and is
+an artifact of calling scikit-learn's `score_samples` on one sample at a time:
+scikit-learn is optimised for batched inference, so per-message Python/NumPy
+call overhead dominates (profiling measured ~10 ms per single sample versus
+~0.014 ms per row when scoring a batch). Even so, p99 telemetry latency stayed
+under 25 ms at the tested throughput.
+
+In response, scoring was moved into an asynchronous micro-batch worker
+(Section 4.9, `ML_ASYNC_SCORING`, now the default): the telemetry handler
+enqueues each reading and returns immediately, and the worker scores readings
+in batches off the hot path. This is expected to return telemetry latency to
+rule-engine levels (~7 ms) while amortising inference across the batch. The
+inline-versus-batched re-measurement is pending a re-run of the A/B and will be
+added here; the table above is retained as the inline baseline.
+
+**Detection output.** Counts of generated events and ML scores by mode:
+
+| Signal | rules | ml | hybrid |
+| --- | ---: | ---: | ---: |
+| Rule events (OVERLOAD/POWER_SPIKE/…) | 642 | 0 | 660 |
+| `ML_ANOMALY` events | 0 | 9 | 7 |
+| `model_predictions` rows | 0 | 1,376 | 1,375 |
+| Readings scored anomalous (`ml.anomalies`) | – | 104 | 94 |
+
+Two points stand out. First, the ml-only mode flagged 104 readings as anomalous
+but emitted only 9 `ML_ANOMALY` events: the per-device cooldown collapses a
+burst of anomalous readings during an anomaly window into a single event, which
+is the intended behaviour for alert hygiene. Second, the hybrid mode produces
+the union — the full set of rule events plus a small number of ML events — so a
+deployment can keep decisive rule alarms for hard bound violations while the
+model adds coverage. The detection *quality* of these flags (precision/recall)
+is established offline in Section 6.7, because the live pipeline does not carry
+per-reading ground-truth labels.
+
+**Storage.** Database growth over each run:
+
+| Mode | Before | After | Growth |
+| --- | ---: | ---: | ---: |
+| rules | 9.94 MB | 11.91 MB | 1.97 MB |
+| ml | 10.01 MB | 12.04 MB | 2.03 MB |
+| hybrid | 10.01 MB | 12.54 MB | 2.53 MB |
+
+Hybrid stored the most because it writes rule events, a `model_prediction` row
+for every reading, and ML events. As in Section 6.8, this confirms that added
+intelligence has an observable storage cost; it is not a storage-reduction
+result. Persisting a prediction per reading is the main ML storage contributor
+and is a candidate for the selective-retention work in a later phase.
 
 ## 6.8 Database Size Discussion
 
@@ -303,12 +366,15 @@ Second, the experiments were short local Docker runs. They do not prove
 long-term production reliability, cloud deployment readiness, or large-scale
 field performance.
 
-Third, the machine-learning result in Section 6.7 is an offline detection-
-quality measurement on simulator-faithful synthetic data; it is not a field
-result, and the online A/B measuring ML scoring cost in the live gateway is
-still pending. The detector is a single global Isolation Forest. Per-device
-models, adaptive thresholds, forecasting, predictive maintenance, and the
-cloud tier remain future work.
+Third, the machine-learning detection-quality result in Section 6.7 is an
+offline measurement on simulator-faithful synthetic data, not a field result;
+the online A/B in Section 6.7.1 measures only operational cost, not live
+precision/recall. The online A/B also showed that per-sample ML inference adds
+substantial latency (~12 ms) in the current naive implementation — an
+optimization target (batched or offloaded scoring) rather than a fundamental
+limit. The detector is a single global Isolation Forest. Per-device models,
+adaptive thresholds, forecasting, predictive maintenance, and the cloud tier
+remain future work.
 
 Fourth, storage reduction was not achieved or measured as a successful result.
 The proposed mode increased database growth because it stored additional event

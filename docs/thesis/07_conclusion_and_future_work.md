@@ -102,9 +102,11 @@ multi-day uptime, cloud deployment readiness, or large-scale field
 performance.
 
 Third, the ML detector's reported quality is an offline measurement on
-simulator-faithful synthetic data, and the online A/B measuring its cost in the
-live gateway is still pending. The detector is a single global Isolation
-Forest; per-device models and field validation remain future work.
+simulator-faithful synthetic data; the online A/B measured its operational cost
+in the live gateway and showed that per-sample inference adds ~12 ms of latency
+in the current naive implementation (an optimization target, not a fundamental
+limit). The detector is a single global Isolation Forest; per-device models,
+batched/offloaded inference, and field validation remain future work.
 
 Fourth, the current results do not prove storage reduction. Proposed mode
 stores additional event and operational evidence, which increased database
@@ -118,8 +120,10 @@ monitoring and observability architecture, not a billing-grade energy meter.
 
 Phase 1 (completed) implemented unsupervised edge anomaly detection with an
 Isolation Forest, scoring voltage/current/power readings and storing scores in
-`model_predictions`, and compared rule-based against model-based detection
-offline using precision, recall, false positives, and per-type recall.
+`model_predictions`. It compared rule-based against model-based detection
+offline (precision, recall, false positives, per-type recall) and ran an online
+rules/ml/hybrid A/B (Section 6.7.1) measuring the operational cost — latency,
+event counts, and storage — of ML scoring in the live gateway.
 
 Remaining phases follow the hybrid edge–cloud direction motivated by the
 literature (Chapter 2.7):
@@ -135,9 +139,10 @@ literature (Chapter 2.7):
 - **Per-device models.** Train a model per device rather than one global model,
   which the literature shows can improve detection on heterogeneous loads
   (Mofidul et al.).
-- **Online detection A/B.** Run `scripts/run_detection_ab_test.sh` to add the
-  live operational-cost comparison (latency, counts, storage) alongside the
-  offline detection-quality result.
+- **Edge inference optimization.** The online A/B showed per-sample scikit-learn
+  scoring adds ~12 ms of latency; batching, offloading to a worker thread, or a
+  lighter/quantized model would reduce this before the detector runs on
+  constrained hardware.
 
 ## 7.6 Future Storage Optimization
 

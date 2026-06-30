@@ -94,9 +94,29 @@ Operating-point tradeoff (threshold = quantile of normal-data scores):
   artifact rather than a statistical anomaly. This is itself a useful finding
   for the rules-vs-ML discussion.
 - Result is **offline** on synthetic-but-simulator-faithful data. It is a
-  detection-quality measurement, not a field result. The **online A/B**
-  (`run_detection_ab_test.sh`) measures the *operational* cost (latency,
-  counts, DB growth) in the live gateway and is pending a run.
+  detection-quality measurement, not a field result.
+
+## Online A/B result (operational cost, 2026-06-30)
+
+`run_detection_ab_test.sh`, three modes over the labeled scenarios (~1,375–1,379
+telemetry msgs each):
+
+| Mode | Telemetry avg / p99 | ML inference avg / p99 | Rule events | ML_ANOMALY | predictions | DB growth |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| rules | 6.72 / 9.71 ms | – | 642 | 0 | 0 | 1.97 MB |
+| ml | 19.30 / 24.98 ms | 11.85 / 16.28 ms | 0 | 9 | 1376 | 2.03 MB |
+| hybrid | 19.63 / 24.83 ms | 11.90 / 16.50 ms | 660 | 7 | 1375 | 2.53 MB |
+
+**Headline finding:** per-sample scikit-learn `score_samples` adds ~12 ms avg /
+~15 ms p99 to telemetry latency (vs sub-ms for rules), because it is called one
+sample at a time, synchronously, in the async ingestion path. sklearn is
+batch-optimized; this is an optimization target (batch / thread-offload /
+lighter model), not a fundamental limit. p99 still < 25 ms at the tested rate.
+ml-only flagged 104 readings but emitted only 9 events (per-device cooldown
+collapses anomaly-window bursts). Hybrid = union of rule + ML events. Storage:
+hybrid grows most (a prediction row per reading + events). Written into thesis
+Section 6.7.1; cross-mode counts are indicative (scenario randomness), not
+exact like-for-like.
 
 ## Reproduce
 
@@ -104,6 +124,22 @@ Operating-point tradeoff (threshold = quantile of normal-data scores):
 uv run python scripts/train_anomaly_model.py --evaluate   # artifact + offline metrics
 ENABLE_ML=true ML_EMIT_EVENTS=true bash scripts/run_detection_ab_test.sh  # online A/B
 ```
+
+## Inference optimization (2026-06-30, post-A/B)
+
+The inline A/B exposed ~12 ms per-reading ML latency. Profiling: single-sample
+`score_samples` ~10 ms vs ~0.014 ms/row batched (sklearn per-call overhead;
+linear in n_estimators ~0.05 ms/tree, so fewer trees alone is insufficient).
+
+Fix: moved scoring into an async micro-batch worker
+(`gateway/app/workers/ml_scoring.py`). Telemetry handler enqueues each reading
+and returns; worker drains the queue in batches (`ML_BATCH_MAX_SIZE`=128,
+`ML_BATCH_WINDOW_MS`=50), scores in one call via `AnomalyDetector.score_many`,
+then writes predictions + ML events (same cooldown/alert path). `ML_ASYNC_SCORING`
+(default true) toggles inline vs batched for the comparison. Also doubles as the
+queue substrate for Phase 2's escalation gate. 50 tests pass, lint clean.
+**Re-run the A/B (async default) to capture the "after" latency** for Section
+6.7.1 (expected: telemetry back to ~7 ms).
 
 ## Next phases
 

@@ -1,0 +1,4 @@
+ predicted_label | count 
+-----------------+-------
+(0 rows)
+

@@ -1,0 +1,11 @@
+   event_type    | severity | count 
+-----------------+----------+-------
+ DEVICE_FAILURE  | CRITICAL |    10
+ ML_ANOMALY      | WARNING  |     7
+ OVERLOAD        | CRITICAL |   218
+ OVER_VOLTAGE    | WARNING  |    15
+ POWER_SPIKE     | WARNING  |   387
+ UNDER_VOLTAGE   | WARNING  |    30
+ VOLTAGE_ANOMALY | INFO     |    30
+(7 rows)
+

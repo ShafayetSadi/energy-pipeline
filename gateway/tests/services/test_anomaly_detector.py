@@ -52,3 +52,27 @@ def test_detector_flags_voltage_anomaly_not_normal() -> None:
     assert normal is not None and anomalous is not None
     assert anomalous.anomaly_score > normal.anomaly_score
     assert anomalous.is_anomaly
+
+
+@pytest.mark.skipif(not _ARTIFACT.exists(), reason="model artifact not trained")
+def test_score_many_matches_single_score() -> None:
+    detector = AnomalyDetector(Settings(enable_ml=True, ml_model_path=str(_ARTIFACT)))
+    readings = [
+        _telemetry(220.0, 2.0, 440.0),
+        _telemetry(262.0, 6.8, 1500.0),
+        _telemetry(180.0, 8.0, 1500.0),
+    ]
+    batch = detector.score_many(readings)
+    assert len(batch) == len(readings)
+    for reading, batched in zip(readings, batch, strict=True):
+        single = detector.score(reading)
+        assert single is not None and batched is not None
+        # Batched and single-sample scoring must agree.
+        assert batched.anomaly_score == pytest.approx(single.anomaly_score, abs=1e-9)
+        assert batched.is_anomaly == single.is_anomaly
+
+
+def test_score_many_empty_and_disabled() -> None:
+    disabled = AnomalyDetector(Settings(enable_ml=False))
+    assert disabled.score_many([_telemetry(220.0, 2.0, 440.0)]) == [None]
+    assert disabled.score_many([]) == []

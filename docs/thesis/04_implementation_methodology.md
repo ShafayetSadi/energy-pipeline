@@ -229,16 +229,31 @@ max_samples = 1024, contamination = 0.01), then defines the anomaly score as
 threshold is the q-th quantile of the normal-data scores (default q = 0.90),
 which exposes an explicit recall/false-positive operating point.
 
-**Scoring in the pipeline.** When `ENABLE_ML=true`, the telemetry handler
-scores every valid reading, records an `ml_inference` latency sample and
-`ml.scored` / `ml.anomalies` counters, and writes the score and label to
-`model_predictions`. When `ML_EMIT_EVENTS=true`, a flagged reading also raises
-an `ML_ANOMALY` event through the same storage and alert path as a rule hit,
-with a per-device cooldown to bound event volume. The detector is independent
-of the rule engine, enabling rules-only, ml-only, and hybrid configurations.
-If ML is disabled or the artifact is missing, the detector disables itself and
-the gateway runs exactly as the rule-based system, so the baseline path carries
-no ML dependency.
+**Scoring in the pipeline.** When `ENABLE_ML=true`, each valid reading is
+scored, the score and label are written to `model_predictions`, the
+`ml.scored` / `ml.anomalies` counters are updated, and (when
+`ML_EMIT_EVENTS=true`) a flagged reading raises an `ML_ANOMALY` event through
+the same storage and alert path as a rule hit, with a per-device cooldown to
+bound event volume. The detector is independent of the rule engine, enabling
+rules-only, ml-only, and hybrid configurations. If ML is disabled or the
+artifact is missing, the detector disables itself and the gateway runs exactly
+as the rule-based system, so the baseline path carries no ML dependency.
+
+**Async micro-batch scoring.** The first online A/B (Section 6.7.1) showed that
+calling scikit-learn's `score_samples` once per message, synchronously inside
+the ingestion path, added roughly 12 ms of latency per reading — scikit-learn
+is optimised for batched inference, so per-call overhead dominates single-sample
+scoring (profiling measured ~10 ms per single sample versus ~0.014 ms per row
+when batched). To remove this from the hot path, scoring was moved into an
+asynchronous micro-batch worker (`gateway/app/workers/ml_scoring.py`). The
+telemetry handler enqueues a lightweight job per reading and returns
+immediately; the worker drains the queue in batches (bounded by
+`ML_BATCH_MAX_SIZE` or `ML_BATCH_WINDOW_MS`), scores each batch in a single
+model call, and persists predictions and ML events. This keeps telemetry
+latency at rule-engine levels while amortising inference cost across the batch.
+The `ML_ASYNC_SCORING` flag (default true) switches between this worker and the
+original inline path, which allows the inline-versus-batched comparison in
+Section 6.7.1.
 
 ## 4.10 Metrics and Alert Workflow
 

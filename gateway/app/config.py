@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     ml_emit_events: bool = False
     ml_event_type: str = "ML_ANOMALY"
     ml_event_severity: str = "WARNING"
+    # Score readings in an async micro-batch worker (off the ingestion hot path)
+    # rather than inline per message. Batching amortizes scikit-learn's
+    # per-call overhead. Set false to score inline (for inline-vs-batched A/B).
+    ml_async_scoring: bool = True
+    ml_batch_max_size: int = 128
+    ml_batch_window_ms: int = 50
+    ml_queue_max_size: int = 20000
 
     voltage_min: float = 0.0
     voltage_max: float = 300.0
