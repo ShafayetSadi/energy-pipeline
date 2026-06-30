@@ -8,6 +8,7 @@ from ...db.repositories import quality as quality_repo
 from ...db.session import session_scope
 from ...logging_config import get_logger
 from ..alert_service import AlertService
+from ..anomaly_detector import AnomalyDetector
 from ..metrics_service import MetricsService
 from ..rule_engine import RuleEngine
 from ..storage_policy import StoragePolicyService
@@ -28,12 +29,14 @@ class IngestionService:
         *,
         validator: ValidationService,
         rule_engine: RuleEngine,
+        anomaly_detector: AnomalyDetector,
         alert_service: AlertService,
         metrics: MetricsService,
         storage_policy: StoragePolicyService,
     ) -> None:
         self.validator = validator
         self.rule_engine = rule_engine
+        self.anomaly_detector = anomaly_detector
         self.alert_service = alert_service
         self.metrics = metrics
         self.storage_policy = storage_policy

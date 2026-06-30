@@ -1,0 +1,62 @@
+{
+  "model_version": "iforest_v1",
+  "threshold": 0.544876,
+  "threshold_quantile": 0.9,
+  "test_normal": 10000,
+  "test_anomalies": 2000,
+  "precision": 0.6119,
+  "recall": 0.7805,
+  "f1": 0.686,
+  "confusion_matrix": {
+    "tn": 9010,
+    "fp": 990,
+    "fn": 439,
+    "tp": 1561
+  },
+  "false_positive_rate": 0.099,
+  "recall_by_type": {
+    "overload": {
+      "count": 507,
+      "recall": 0.4438
+    },
+    "overvoltage": {
+      "count": 499,
+      "recall": 0.992
+    },
+    "power_spike": {
+      "count": 502,
+      "recall": 0.8606
+    },
+    "undervoltage": {
+      "count": 492,
+      "recall": 0.8313
+    }
+  },
+  "operating_point_tradeoff": [
+    {
+      "quantile": 0.9,
+      "threshold": 0.5449,
+      "fpr": 0.099,
+      "recall": 0.7805
+    },
+    {
+      "quantile": 0.95,
+      "threshold": 0.5734,
+      "fpr": 0.052,
+      "recall": 0.387
+    },
+    {
+      "quantile": 0.975,
+      "threshold": 0.6018,
+      "fpr": 0.0247,
+      "recall": 0.2415
+    },
+    {
+      "quantile": 0.99,
+      "threshold": 0.6335,
+      "fpr": 0.0106,
+      "recall": 0.188
+    }
+  ],
+  "evaluated_at": "2026-06-30T07:30:23.319964+00:00"
+}

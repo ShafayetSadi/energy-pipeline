@@ -7,9 +7,11 @@ from typing import TYPE_CHECKING, Any
 
 from ...db.repositories import devices as device_repo
 from ...db.repositories import events as event_repo
+from ...db.repositories import predictions as prediction_repo
 from ...db.repositories import readings as reading_repo
 from ...db.session import session_scope
 from ...schemas.telemetry import TelemetryPayload
+from ..rule_engine import RuleHit
 from ..validation_service import ValidationResult
 from .helpers import json_dumps, topic_device_id
 
@@ -48,6 +50,55 @@ async def handle_telemetry(
     else:
         hits = []
 
+    # Edge ML anomaly scoring (Phase 1: Isolation Forest). Independent of the
+    # rule engine so the A/B harness can run rules-only, ml-only, or hybrid.
+    ml_result = None
+    if (
+        service.settings.is_proposed
+        and service.settings.enable_ml
+        and service.anomaly_detector.available
+    ):
+        ml_start = time.monotonic()
+        ml_result = service.anomaly_detector.score(payload)
+        service.metrics.record_latency(
+            "ml_inference", (time.monotonic() - ml_start) * 1000.0
+        )
+        if ml_result is not None:
+            service.metrics.incr("ml.scored")
+            if ml_result.is_anomaly:
+                service.metrics.incr("ml.anomalies")
+            # In hybrid/ml-only detection, an ML anomaly becomes an event and
+            # flows through the same storage/alert path as a rule hit.
+            if (
+                ml_result.is_anomaly
+                and service.settings.ml_emit_events
+                and not service.rule_engine.is_cooldown_active(
+                    (payload.device_id, service.settings.ml_event_type)
+                )
+            ):
+                service.rule_engine.mark_alert_sent(
+                    (payload.device_id, service.settings.ml_event_type)
+                )
+                hits.append(
+                    RuleHit(
+                        rule_name="ml_isolation_forest",
+                        event_type=service.settings.ml_event_type,
+                        severity=service.settings.ml_event_severity,
+                        message=(
+                            f"ML anomaly score {ml_result.anomaly_score:.4f} "
+                            f"> {ml_result.threshold:.4f} "
+                            f"(model={ml_result.model_version})"
+                        ),
+                        event_value=ml_result.anomaly_score,
+                        threshold_value=ml_result.threshold,
+                        metadata={
+                            "detector": "isolation_forest",
+                            "model_version": ml_result.model_version,
+                            "features": service.settings.ml_feature_list,
+                        },
+                    )
+                )
+
     async with session_scope() as session:
         await device_repo.upsert_device(
             session,
@@ -79,6 +130,29 @@ async def handle_telemetry(
 
         if attempted_raw_insert and not inserted:
             service.metrics.incr("readings.duplicates")
+
+        if ml_result is not None:
+            reading_time = (
+                payload.timestamp
+                if payload.timestamp.tzinfo
+                else payload.timestamp.replace(tzinfo=gateway_received_at.tzinfo)
+            )
+            await prediction_repo.insert_prediction(
+                session,
+                time=reading_time,
+                device_id=payload.device_id,
+                model_version=ml_result.model_version,
+                prediction_type="anomaly",
+                anomaly_score=ml_result.anomaly_score,
+                predicted_label="anomaly" if ml_result.is_anomaly else "normal",
+                metadata={
+                    "threshold": ml_result.threshold,
+                    "features": service.settings.ml_feature_list,
+                    "rule_triggered": bool(
+                        [h for h in hits if h.event_type != service.settings.ml_event_type]
+                    ),
+                },
+            )
 
         created_events: list[tuple[int, datetime]] = []
         for hit in hits:

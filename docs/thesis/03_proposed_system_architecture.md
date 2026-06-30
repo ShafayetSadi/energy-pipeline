@@ -33,11 +33,15 @@ FastAPI edge gateway
         |
         | validation
         | rule evaluation
+        | ML anomaly scoring (Isolation Forest, Phase 1)
         | event classification
         | metrics collection
         v
 PostgreSQL/TimescaleDB
         |
+        |  (planned) score-gated escalation of flagged windows
+        v ----------------------------------> Cloud tier (future phase:
+        |                                      heavier model / forecasting)
         v
 Grafana dashboards and REST API clients
 ```
@@ -48,7 +52,9 @@ The architecture follows five principles:
 2. Separate normal readings from abnormal events.
 3. Store time-series data in a database designed for time-window queries.
 4. Make validation, latency, throughput, and event counts observable.
-5. Keep future AI/ML anomaly detection as an extension point, not as a current claim.
+5. Add edge intelligence incrementally — rule-based detection first, then a
+   lightweight ML detector at the edge (Phase 1), with a cloud tier and
+   score-gated escalation staged as later phases.
 
 ## 3.2 Energy Monitoring Node Layer
 
@@ -127,7 +133,8 @@ The gateway responsibilities are:
 | Payload validation | Validate telemetry/status/event schemas before storage |
 | Data-quality logging | Record invalid payloads and validation failure reasons |
 | Rule evaluation | Apply threshold and percentage-increase rules to valid telemetry |
-| Event classification | Convert rule hits into typed events with severity |
+| ML anomaly scoring | Score each reading with an Isolation Forest detector (Phase 1) and persist scores to `model_predictions` |
+| Event classification | Convert rule hits and ML anomalies into typed events with severity |
 | Persistence | Store devices, readings, events, status history, metrics, and quality logs |
 | Metrics | Track counters and latency summaries for evaluation |
 | REST API | Expose health, readings, devices, events, rules, and metrics endpoints |
@@ -218,7 +225,7 @@ The main tables are:
 | `rule_definitions` | Future database-backed rule management |
 | `alert_outbox` | Pending or processed alert notifications |
 | `alert_deliveries` | Alert delivery history |
-| `model_predictions` | Future AI/ML prediction extension point |
+| `model_predictions` | Edge ML anomaly scores and labels (Phase 1); extensible to forecasts |
 
 The important indexes support device/time lookup and event filtering. The
 time-series tables can be converted into TimescaleDB hypertables, allowing
@@ -252,25 +259,40 @@ Slack-style integrations. The outbox pattern separates event creation from
 notification delivery so that detection is not blocked by a temporary
 external notification failure.
 
-## 3.9 AI/ML-Ready Extension Points
+## 3.9 Edge ML Anomaly Detection (Phase 1)
 
-The current thesis uses rule-based detection, not machine-learning anomaly
-detection. However, the architecture contains extension points for future
-AI/ML work.
+The architecture is extended with an unsupervised machine-learning detector
+that runs at the edge alongside the rule engine. The detector is an **Isolation
+Forest** trained offline on normal operating data and loaded by the gateway as
+a model artifact (following Mofidul et al. [15]; see Chapter 2.7).
 
-Future model-based modules could use:
+The detector scores a physics-informed feature vector derived from each
+reading:
 
-- historical `energy_readings` as model input
-- `events` as weak labels or evaluation labels
-- `data_quality_logs` to filter malformed inputs
-- `device_status_history` to distinguish device faults from electrical anomalies
-- `model_predictions` to store future anomaly scores or forecast results
+```text
+[ voltage_v, current_a, power_w, temperature_c,
+  |voltage_v - V_nominal|,          # voltage excursion
+  power_w - voltage_v*current_a ]   # P vs implied apparent power
+```
 
-A future ML module could run after ingestion or as a background worker. It
-could read recent time windows, calculate anomaly scores, and write prediction
-records without changing the MQTT topic contract or dashboard architecture.
-This keeps the current thesis honest: AI/ML is a planned extension point, not
-a measured result.
+It returns an anomaly score (higher = more anomalous) and flags the reading
+when the score exceeds a threshold derived from the training distribution. The
+score and label are written to `model_predictions` for every reading; when
+event emission is enabled, a flagged reading also raises an `ML_ANOMALY` event
+through the same storage and alert path as a rule hit.
+
+The detector is independent of the rule engine, which lets the evaluation run
+three configurations — **rules-only**, **ml-only**, and **hybrid** — and
+compare detection quality and processing overhead directly. It also degrades
+gracefully: if ML is disabled or the artifact is unavailable, the gateway
+behaves exactly as the rule-based system, so the baseline path carries no ML
+dependency.
+
+This realises the edge-AI direction that Verde Romero et al. [14] named as
+future work. The remaining elements of the hybrid design — a cloud tier and
+score-gated escalation of flagged windows (Sathupadi et al. [16]) and
+edge-side storage/bandwidth optimization (Huang et al. [17]) — are staged as
+later phases and are not claimed as results here.
 
 ## 3.10 Chapter Summary
 

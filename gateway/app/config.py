@@ -54,6 +54,20 @@ class Settings(BaseSettings):
     enable_alerts: bool = True
     enable_ml: bool = False
 
+    # Edge ML anomaly detection (Phase 1: Isolation Forest at the edge).
+    ml_model_path: str = "/app/models/anomaly_iforest.joblib"
+    ml_model_version: str = "iforest_v1"
+    ml_features: str = "voltage_v,current_a,power_w,temperature_c"
+    # Anomaly score above this flags a reading. Empty -> use threshold baked
+    # into the model artifact at training time.
+    ml_score_threshold: float | None = None
+    # When true, ML anomalies are written to the events table (hybrid/ml-only
+    # detection). When false, scores are still written to model_predictions but
+    # no event is generated (silent scoring).
+    ml_emit_events: bool = False
+    ml_event_type: str = "ML_ANOMALY"
+    ml_event_severity: str = "WARNING"
+
     voltage_min: float = 0.0
     voltage_max: float = 300.0
     current_min: float = 0.0
@@ -118,6 +132,10 @@ class Settings(BaseSettings):
     @property
     def is_proposed(self) -> bool:
         return self.processing_mode == "proposed"
+
+    @property
+    def ml_feature_list(self) -> list[str]:
+        return [f.strip() for f in self.ml_features.split(",") if f.strip()]
 
     @property
     def rules_path(self) -> Path:

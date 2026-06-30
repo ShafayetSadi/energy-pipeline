@@ -17,7 +17,10 @@ RUN pip install --no-cache-dir \
     "aiomqtt>=2.3.0" \
     "httpx>=0.28.0" \
     "pyyaml>=6.0.0" \
-    "structlog>=24.4.0"
+    "structlog>=24.4.0" \
+    "numpy>=2.0.0" \
+    "scikit-learn>=1.5.0" \
+    "joblib>=1.4.0"
 
 COPY app /app/gateway/app
 COPY config /app/config

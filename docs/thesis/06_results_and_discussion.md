@@ -184,7 +184,65 @@ readings; it also exposes operational evidence for evaluation and monitoring.
 The dashboards help demonstrate event-driven observability, which is part of
 the proposed architecture.
 
-## 6.7 Database Size Discussion
+## 6.7 Edge ML Anomaly Detection Results (Phase 1)
+
+This section reports the offline detection quality of the edge Isolation Forest
+detector. These results were produced by
+`scripts/train_anomaly_model.py --evaluate` (seed 42, 50,000 normal training
+samples, a held-out test set of 10,000 normal and 2,000 injected anomalies)
+and written to `results/anomaly_model/offline_evaluation.json`.
+
+At the shipped operating point (detection threshold = 0.90 quantile of the
+normal-data anomaly scores):
+
+| Metric | Value |
+| --- | ---: |
+| Precision | 0.612 |
+| Recall | 0.780 |
+| F1 | 0.686 |
+| False-positive rate | 0.099 |
+| Confusion (tn / fp / fn / tp) | 9010 / 990 / 439 / 1561 |
+
+Recall varied by anomaly type:
+
+| Anomaly type | Count | Recall |
+| --- | ---: | ---: |
+| `overvoltage` | 499 | 0.992 |
+| `power_spike` | 502 | 0.861 |
+| `undervoltage` | 492 | 0.831 |
+| `overload` | 507 | 0.444 |
+
+The detection threshold is a tunable operating point. Lowering it raises recall
+at the cost of more false positives:
+
+| Threshold quantile | Threshold | FPR | Recall |
+| ---: | ---: | ---: | ---: |
+| 0.90 | 0.545 | 0.099 | 0.780 |
+| 0.95 | 0.573 | 0.052 | 0.387 |
+| 0.975 | 0.602 | 0.025 | 0.242 |
+| 0.99 | 0.634 | 0.011 | 0.188 |
+
+The interpretation is twofold. First, the unsupervised detector reliably flags
+anomalies that leave the normal operating envelope — over-voltage (0.99),
+power spikes (0.86), and under-voltage (0.83) — without using any labels.
+Second, `overload` recall is low (0.44), and this is an expected and useful
+finding rather than a failure: the simulator's normal evening load already
+drives current well above the rule's 10 A overload threshold, so a rule-based
+overload alarm fires on normal high-load operation, whereas a detector trained
+on the actual operating distribution correctly treats those readings as normal.
+This directly informs the rules-versus-ML discussion: rules are decisive for
+hard bound violations, while the model adds value for envelope and
+consistency anomalies and avoids the over-sensitivity of a fixed current
+threshold.
+
+The online detection A/B (`scripts/run_detection_ab_test.sh`), which measures
+the operational cost of ML scoring in the live gateway (latency, event counts,
+and database growth across rules-only, ml-only, and hybrid modes), is defined
+in Section 5.5 and is pending a run; its results will be added here once
+collected. It should be reported separately from the offline detection quality
+above.
+
+## 6.8 Database Size Discussion
 
 Database size was measured before and after the clean high-throughput A/B
 runs. The measurements are useful as a storage-cost observation, but they do
@@ -204,7 +262,7 @@ retention, downsampling, or event-only long-term storage.
 The correct interpretation is that proposed mode has an observable storage
 cost in exchange for additional event intelligence and monitoring evidence.
 
-## 6.8 Discussion Against Research Questions
+## 6.9 Discussion Against Research Questions
 
 The first research question asks how an event-driven edge gateway can improve
 smart energy monitoring pipelines. The results show that the gateway improves
@@ -224,13 +282,15 @@ experiment confirms that overload, power spike, voltage, and device-failure
 events were detected, while telemetry p99 latency remained below 9 ms in the
 anomaly run.
 
-The fourth research question asks how ready the platform is for future AI/ML
-extension. The current system is ready at the architecture level because it
-stores time-series readings, events, validation logs, and metrics that could
-later be used for model training or evaluation. However, the current results
-do not include an implemented ML anomaly detector.
+The fourth research question asks how ready the platform is for AI/ML
+extension. Phase 1 answers this concretely: an edge Isolation Forest detector
+is implemented, trained offline, and evaluated (Section 6.7), scoring every
+reading into `model_predictions` and optionally raising `ML_ANOMALY` events
+through the same path as rules. The platform is therefore no longer only
+ML-ready in principle; it runs a working edge ML detector, with the cloud tier,
+score-gated escalation, and storage optimization staged as later phases.
 
-## 6.9 Limitations
+## 6.10 Limitations
 
 The results should be interpreted within the scope of the experiment.
 
@@ -243,10 +303,12 @@ Second, the experiments were short local Docker runs. They do not prove
 long-term production reliability, cloud deployment readiness, or large-scale
 field performance.
 
-Third, the anomaly detection logic is rule-based. The current thesis should
-not describe the system as an ML anomaly detection system. Machine learning,
-adaptive thresholds, forecasting, and predictive maintenance should be framed
-as future work.
+Third, the machine-learning result in Section 6.7 is an offline detection-
+quality measurement on simulator-faithful synthetic data; it is not a field
+result, and the online A/B measuring ML scoring cost in the live gateway is
+still pending. The detector is a single global Isolation Forest. Per-device
+models, adaptive thresholds, forecasting, predictive maintenance, and the
+cloud tier remain future work.
 
 Fourth, storage reduction was not achieved or measured as a successful result.
 The proposed mode increased database growth because it stored additional event
@@ -256,7 +318,7 @@ Finally, the system is not a certified metering platform. It demonstrates an
 event-driven monitoring architecture and software pipeline, not certified
 commercial billing accuracy.
 
-## 6.10 Chapter Conclusion
+## 6.11 Chapter Conclusion
 
 The results show that the proposed event-driven gateway adds useful event
 intelligence with only a small latency overhead. Under the repeated

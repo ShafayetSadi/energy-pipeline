@@ -60,6 +60,7 @@ The specific objectives are:
 4. Store accepted readings, events, validation logs, and operational metrics in PostgreSQL/TimescaleDB.
 5. Provide Grafana dashboards for energy overview, device detail, event timeline, system observability, and thesis evaluation.
 6. Compare a baseline ingestion path with the proposed event-driven gateway using throughput, latency, validation, event-detection, and storage-cost evidence.
+7. Add an unsupervised edge anomaly detector (Isolation Forest) and evaluate it against rule-based detection (Phase 1 of a hybrid edge–cloud direction).
 
 ## 1.5 Scope of the Project
 
@@ -73,6 +74,7 @@ Included:
 - MQTT communication
 - edge gateway processing
 - rule-based event detection
+- edge ML anomaly detection (Isolation Forest, Phase 1), offline-evaluated
 - PostgreSQL/TimescaleDB storage
 - Grafana dashboards
 
@@ -80,7 +82,7 @@ Excluded / out of scope:
 
 - full production deployment
 - large-scale field hardware validation
-- complete ML model implementation
+- cloud-tier ML, forecasting, and score-gated edge→cloud escalation
 - certified commercial metering accuracy
 - storage reduction as a measured result
 
@@ -91,7 +93,7 @@ This thesis answers the following research questions:
 1. How can an event-driven edge gateway improve smart energy monitoring pipelines?
 2. How does the proposed architecture compare with a baseline telemetry-storage approach?
 3. Can rule-based processing detect abnormal energy events while maintaining low processing latency?
-4. How ready is the platform for future AI/ML extension?
+4. Can a lightweight unsupervised model (Isolation Forest) add anomaly detection at the edge, and how does it compare with rule-based detection?
 
 ## 1.7 Expected Contributions
 
@@ -102,7 +104,8 @@ The expected contributions are:
 3. Rule-based detection evidence for overload, power spike, voltage anomaly, under-voltage, over-voltage, and device-failure conditions.
 4. Validation and data-quality evidence for malformed MQTT payloads.
 5. Grafana dashboards that expose readings, events, gateway metrics, and thesis evaluation results.
-6. A clearly defined future path for ML anomaly detection and storage optimization without claiming those as completed results.
+6. An edge Isolation Forest anomaly detector (Phase 1) with an offline precision/recall evaluation and an honest rules-versus-ML comparison.
+7. A clearly defined phased path toward a hybrid edge–cloud design (cloud-tier model, score-gated escalation, storage optimization) without claiming those as completed results.
 
 ## 1.8 Thesis Organization
 

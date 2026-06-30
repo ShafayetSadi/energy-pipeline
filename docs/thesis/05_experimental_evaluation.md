@@ -54,9 +54,12 @@ The defensible thesis claim is:
 > IoT-based smart energy monitoring using MQTT, rule-based event detection,
 > TimescaleDB storage, and Grafana observability dashboards.
 
-The current work does not claim machine-learning anomaly detection, storage
-reduction, production-grade field deployment, certified metering accuracy, or
-large-scale smart-grid validation. These are treated as future work.
+Building on this baseline, the work adds an edge machine-learning detector
+(Phase 1, Section 5.5), so detection can be compared across rules-only,
+ml-only, and hybrid configurations. The current work does not yet claim a cloud
+tier, score-gated escalation, storage reduction, production-grade field
+deployment, certified metering accuracy, or large-scale smart-grid validation.
+These are treated as later phases and future work.
 
 ## 5.3 High-Throughput A/B Test Method
 
@@ -121,7 +124,42 @@ results/anomaly_detection/proposed/
 This experiment collected event counts by type and severity, validation errors
 by type, gateway counters, and latency summaries.
 
-## 5.5 Metrics Collected
+## 5.5 Edge ML Detection Evaluation Method (Phase 1)
+
+The edge Isolation Forest detector is evaluated in two complementary ways: an
+offline detection-quality measurement and an online operational A/B.
+
+**Offline detection quality.** The model is trained and evaluated by
+`scripts/train_anomaly_model.py --evaluate`. Training data mirrors the
+simulator's telemetry distribution; a held-out labeled test set combines normal
+readings with injected anomalies generated the way the simulator generates them
+(overriding only the anomaly field). Because the labels are known by
+construction, this yields genuine precision, recall, F1, false-positive rate,
+per-anomaly-type recall, and an operating-point tradeoff table (detection
+threshold versus recall/FPR). This separates *detection quality* from the live
+pipeline and is fully reproducible from a fixed seed without a running stack.
+
+**Online detection A/B.** The script `scripts/run_detection_ab_test.sh` runs
+the same labeled anomaly scenarios in three gateway configurations:
+
+| Mode | Configuration |
+| --- | --- |
+| rules | `ENABLE_RULE_ENGINE=true`, `ENABLE_ML=false` |
+| ml | `ENABLE_RULE_ENGINE=false`, `ENABLE_ML=true`, `ML_EMIT_EVENTS=true` |
+| hybrid | `ENABLE_RULE_ENGINE=true`, `ENABLE_ML=true`, `ML_EMIT_EVENTS=true` |
+
+For each mode it captures detected events by type, prediction counts and score
+statistics from `model_predictions`, telemetry and `ml_inference` latency, and
+database growth, under:
+
+```text
+results/detection_ab/{rules,ml,hybrid}/
+```
+
+This measures the *operational cost* of adding ML scoring to the live pipeline,
+complementing the offline detection-quality measurement.
+
+## 5.6 Metrics Collected
 
 The evaluation used both simulator-side and gateway-side metrics.
 
@@ -142,7 +180,9 @@ Gateway-side metrics:
 - `events.info`
 - event counts by type
 - validation errors by type
-- telemetry and status latency percentiles
+- `ml.scored` and `ml.anomalies` counters (when ML is enabled)
+- `model_predictions` counts and anomaly-score statistics
+- telemetry, status, and `ml_inference` latency percentiles
 
 Latency was reported using average, p50, p95, and p99 values. These values
 were exported from the gateway metrics snapshot and summarized in generated
@@ -155,7 +195,7 @@ discussion, not as a storage-optimization result. Both modes store raw
 readings, and the proposed mode also stores event evidence. Therefore, the
 current experiment does not support a storage-reduction claim.
 
-## 5.6 Data Collection Procedure
+## 5.7 Data Collection Procedure
 
 The high-throughput A/B test and anomaly detection experiment generated
 machine-readable and human-readable artifacts.
@@ -195,7 +235,7 @@ Grafana dashboards were used as visual evidence that readings, events,
 validation behavior, and system metrics can be inspected during and after the
 experiments.
 
-## 5.7 Experimental Limitations
+## 5.8 Experimental Limitations
 
 The evaluation has several limitations.
 
@@ -207,10 +247,12 @@ Second, the experiments are short local Docker runs. They show repeatable
 behavior under controlled test conditions, but they do not prove multi-day
 production reliability or deployment readiness.
 
-Third, anomaly detection is rule-based. The current implementation does not
-train or run a machine-learning anomaly detection model. The database schema
-and architecture leave extension points for future ML work, but ML detection
-is outside the measured scope of this thesis version.
+Third, the machine-learning detector is evaluated offline on simulator-faithful
+synthetic data, and in the live pipeline only its operational cost is measured.
+The offline precision/recall therefore reflects detection quality on controlled
+data, not field accuracy. The detector is also a single global Isolation Forest;
+per-device models (which the literature shows can perform better) and the cloud
+tier with score-gated escalation remain future phases.
 
 Fourth, storage reduction is not measured as a successful result. The proposed
 mode writes additional event records, so database growth is expected. Selective

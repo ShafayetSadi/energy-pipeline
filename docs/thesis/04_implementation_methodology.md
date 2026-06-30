@@ -160,7 +160,7 @@ The main tables are:
 | `rule_definitions` | Future path for database/API-driven rule management |
 | `alert_outbox` | Pending alert notifications |
 | `alert_deliveries` | Delivery result history |
-| `model_predictions` | Future AI/ML prediction storage |
+| `model_predictions` | Edge ML anomaly scores and labels (Phase 1); extensible to forecasts |
 
 The `energy_readings` table uses `(time, device_id)` as its primary key and
 has an index on `(device_id, time)` for device time-series queries. The
@@ -200,7 +200,47 @@ turns that hit into a stored event with a device ID, event type, severity,
 rule name, message, event value, threshold value, and metadata. This provides
 traceability between raw telemetry and the generated event.
 
-## 4.9 Metrics and Alert Workflow
+## 4.9 Edge ML Anomaly Detector Implementation
+
+The edge ML detector is implemented in
+`gateway/app/services/anomaly_detector.py` and trained by
+`scripts/train_anomaly_model.py`. It uses an Isolation Forest from
+scikit-learn, persisted as a joblib artifact and mounted read-only into the
+gateway container at `/app/models`.
+
+**Feature engineering (`physics_v1`).** Each reading is mapped to a six-element
+vector: the four raw fields `[voltage_v, current_a, power_w, temperature_c]`
+plus two physics-informed features — the voltage excursion
+`|voltage_v - 220|` and the power consistency residual
+`power_w - voltage_v*current_a`. The same transform is implemented in both the
+training script (`engineer()`) and the gateway (`_apply_engineering`) under the
+`physics_v1` tag. These features are needed because a global Isolation Forest
+over raw whole-house load dilutes single-axis anomalies across its random
+splits and does not isolate out-of-range values quickly; the engineered
+features make voltage excursions and voltage/current/power inconsistencies
+separable.
+
+**Training and threshold.** The training script generates data that mirrors the
+simulator's telemetry distribution, including the simulator's behaviour of
+overriding only the anomaly field on top of an otherwise-normal reading. It
+fits a `StandardScaler` and an `IsolationForest` (n_estimators = 200,
+max_samples = 1024, contamination = 0.01), then defines the anomaly score as
+`-model.score_samples(x)` so that higher means more anomalous. The detection
+threshold is the q-th quantile of the normal-data scores (default q = 0.90),
+which exposes an explicit recall/false-positive operating point.
+
+**Scoring in the pipeline.** When `ENABLE_ML=true`, the telemetry handler
+scores every valid reading, records an `ml_inference` latency sample and
+`ml.scored` / `ml.anomalies` counters, and writes the score and label to
+`model_predictions`. When `ML_EMIT_EVENTS=true`, a flagged reading also raises
+an `ML_ANOMALY` event through the same storage and alert path as a rule hit,
+with a per-device cooldown to bound event volume. The detector is independent
+of the rule engine, enabling rules-only, ml-only, and hybrid configurations.
+If ML is disabled or the artifact is missing, the detector disables itself and
+the gateway runs exactly as the rule-based system, so the baseline path carries
+no ML dependency.
+
+## 4.10 Metrics and Alert Workflow
 
 The metrics service keeps in-memory counters and latency samples, then
 periodically flushes them to `system_metrics`. The exported metrics include
@@ -223,7 +263,7 @@ alert records can be queued in `alert_outbox`. A background worker can process
 pending alerts and record delivery results. This separates detection from
 delivery and prevents a notification failure from blocking event persistence.
 
-## 4.10 Dashboard Implementation
+## 4.11 Dashboard Implementation
 
 Grafana is provisioned from files under `config/grafana`. The datasource is
 configured to connect to TimescaleDB, and dashboard JSON files are loaded into
@@ -243,7 +283,7 @@ The dashboards are designed to support both operation and thesis evidence.
 They do not replace the exported result files, but they visually confirm that
 readings, events, data-quality behavior, and system metrics are observable.
 
-## 4.11 Docker-Based Deployment
+## 4.12 Docker-Based Deployment
 
 Docker Compose is used to run the local system. The main services are:
 
@@ -257,10 +297,12 @@ Docker Compose is used to run the local system. The main services are:
 
 The gateway is configured through environment variables such as
 `PROCESSING_MODE`, `STORE_RAW_READINGS`, `ENABLE_RULE_ENGINE`,
-`ENABLE_AGGREGATION`, and `ENABLE_ALERTS`. This makes it possible to switch
-between baseline and proposed modes for evaluation.
+`ENABLE_AGGREGATION`, `ENABLE_ALERTS`, `ENABLE_ML`, and `ML_EMIT_EVENTS`. This
+makes it possible to switch between baseline and proposed modes and between
+rules-only, ml-only, and hybrid detection for evaluation. The trained model
+artifact is mounted read-only at `/app/models/anomaly_iforest.joblib`.
 
-## 4.12 Testing Strategy
+## 4.13 Testing Strategy
 
 The testing strategy combines automated tests and scripted system experiments.
 
@@ -269,6 +311,7 @@ Automated tests cover:
 - MQTT topic parsing
 - payload validation
 - rule engine behavior
+- ML anomaly detector behavior (disabled path, missing-artifact path, live scoring)
 - repository operations
 - metrics service behavior
 - alert service and outbox worker behavior
@@ -293,17 +336,21 @@ The key scripts are:
 | `scripts/run_proposed_test.sh` | Single proposed experiment |
 | `scripts/run_high_throughput_ab_test.sh` | Clean repeated baseline/proposed comparison |
 | `scripts/run_anomaly_detection_test.sh` | Proposed-mode anomaly and validation evidence |
+| `scripts/train_anomaly_model.py` | Train + offline-evaluate the Isolation Forest detector |
+| `scripts/run_detection_ab_test.sh` | Rules-only vs ml-only vs hybrid detection A/B |
 | `scripts/export_results.py` | Export metrics snapshots and Markdown reports |
 
 This strategy keeps the thesis evaluation reproducible. The automated tests
 verify the implementation pieces, while the experiment scripts generate the
 evidence used in Chapter 6.
 
-## 4.13 Chapter Summary
+## 4.14 Chapter Summary
 
 The implementation follows the proposed architecture closely. MQTT messages
 enter through Mosquitto, the FastAPI gateway validates and processes them,
-TimescaleDB stores readings and events, Grafana visualizes the system state,
-and scripts export reproducible evaluation evidence. The implementation is
-rule-based and observable, with explicit extension points for future ML
-prediction and storage optimization.
+applies rule-based detection and an edge Isolation Forest anomaly detector,
+TimescaleDB stores readings, events, and model predictions, Grafana visualizes
+the system state, and scripts export reproducible evaluation evidence. The
+implementation now includes a trained, offline-evaluated edge ML detector
+(Phase 1), with explicit extension points for the cloud tier, score-gated
+escalation, and storage optimization in later phases.

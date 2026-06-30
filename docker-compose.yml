@@ -70,10 +70,14 @@ services:
       ENABLE_RULE_ENGINE: ${ENABLE_RULE_ENGINE:-true}
       ENABLE_AGGREGATION: ${ENABLE_AGGREGATION:-true}
       ENABLE_ALERTS: ${ENABLE_ALERTS:-true}
+      ENABLE_ML: ${ENABLE_ML:-false}
+      ML_EMIT_EVENTS: ${ML_EMIT_EVENTS:-false}
+      ML_MODEL_PATH: ${ML_MODEL_PATH:-/app/models/anomaly_iforest.joblib}
     ports:
       - "8001:8000"
     volumes:
       - ./gateway/config:/app/config:ro
+      - ./models:/app/models:ro
 
   grafana:
     image: grafana/grafana:11.2.0

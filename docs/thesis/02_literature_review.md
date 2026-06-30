@@ -160,11 +160,65 @@ or machine-learning methods for IoT and energy systems [12], [13]. Those
 methods can be useful, but they require training data, model evaluation, and
 careful treatment of false positives and false negatives.
 
-For this thesis, rule-based detection is appropriate because the objective is
-to evaluate the architecture and processing overhead of an event-driven edge
-gateway. Machine-learning anomaly detection remains future work.
+Rule-based detection is the starting point of this thesis and remains the
+baseline detector. Building on it, the work is extended with an unsupervised
+machine-learning detector at the edge (Section 2.7), so that rule-based and
+model-based detection can be compared directly rather than treating ML purely
+as future work.
 
-## 2.7 Review of Related Work
+## 2.7 Hybrid Edge–Cloud AI for Energy Monitoring
+
+A recent line of work moves beyond rule-based monitoring toward placing
+*lightweight machine learning at the edge* and reserving *heavier models for a
+cloud tier*. Four studies in particular motivate the direction taken here.
+
+Verde Romero et al. [14] present an open-source IoT edge-computing system for
+building energy monitoring (Mosquitto MQTT, Node-RED, SQLite) across an
+asset–edge–cloud hierarchy. Their central argument is that edge/fog processing
+reduces latency, improves privacy, and preserves operation during internet
+outages relative to a cloud-only design. They demonstrate real-time dashboards
+but do not quantify latency, and they explicitly name *exploring artificial
+intelligence at the edge* as future work. This thesis treats that stated
+future work as a concrete objective: the edge gateway here is a stronger
+substrate (FastAPI, TimescaleDB, a configurable rule engine, durable alerting,
+and a quantitative A/B harness) on which edge AI can be implemented and
+measured.
+
+Mofidul et al. [15] build a secured IIoT infrastructure with ESP32-S nodes
+(ZMPT101B voltage and SEN0211 current sensors), MQTTS/TLS, PostgreSQL, and
+**per-appliance Isolation Forest** anomaly detection on edge and cloud
+(n_estimators = 100, contamination = 0.01). Their work supports three choices
+made here: Isolation Forest as an unsupervised, label-free edge detector;
+TLS-secured MQTT and per-device credentials as a security direction; and a
+sensor bill of materials that matches the intended hardware node. They also
+show that *per-device* models outperform a single model over heterogeneous
+data — a finding that frames the per-device extension as the natural next step
+beyond the global model used in this phase.
+
+Sathupadi et al. [16] propose an edge–cloud synergy in which a lightweight
+detector runs at the edge and forwards only flagged windows to a heavier cloud
+model, governed by an anomaly score threshold (score > μ + α·σ) and a dynamic
+workload manager balancing latency, bandwidth, and energy. This threshold-gated
+escalation pattern is the blueprint for the hybrid architecture targeted by
+this thesis: cheap detection at the edge, selective escalation to the cloud,
+measured on latency and bandwidth.
+
+Huang et al. [17] describe a four-layer edge/fog/cloud framework for user-side
+energy management that adds LSTM-attention load forecasting, demand response,
+and notably **edge-side data compression** (lossless Huffman/LZW and lossy
+DCT/PCA), reporting substantial per-node data-volume reductions. This supplies
+concrete techniques and evaluation metrics (compression ratio, information
+retention) for the storage-optimization phase, which the current thesis
+otherwise leaves as an unproven claim.
+
+Taken together, these works converge on a single pattern — *rules/lightweight
+ML at the edge, heavier ML in the cloud, gated by an anomaly score, evaluated
+on latency, bandwidth, and storage* — which this thesis adopts and begins to
+realise. Phase 1 (this document set) implements and offline-evaluates the edge
+Isolation Forest detector; the cloud tier, escalation gate, and storage
+optimization are staged as subsequent phases.
+
+## 2.8 Review of Related Work
 
 The related literature and technical references show that smart energy
 monitoring, MQTT-based communication, edge/fog computing, time-series
@@ -186,8 +240,12 @@ edge-gateway evaluation.
 | Grafana PostgreSQL documentation [11] | Dashboard observability | PostgreSQL datasource, macros, annotations | Supports time-series visualization and table dashboards | Dashboard quality depends on query design | Justifies Grafana for thesis evidence and operational visibility |
 | IoT anomaly detection survey material [12] | Anomaly detection methods for IoT | Statistical and ML methods | Shows importance of anomaly detection in IoT systems | ML methods require datasets and model evaluation | Positions ML as future work beyond rule-based detection |
 | IoT smart energy management review [13] | Smart energy analytics and energy disaggregation | IoT networks, energy management, algorithms | Shows broader direction toward intelligent analysis | Focuses on advanced analytics beyond this implementation | Supports future ML/forecasting extension direction |
+| Verde Romero et al. [14] | Open-source edge energy monitoring for buildings | Mosquitto, Node-RED, SQLite, asset/edge/cloud | Demonstrates edge/fog benefits (latency, privacy, offline operation) | No quantified latency; edge AI only proposed as future work | Primary motivation; this thesis implements and measures the edge AI they propose |
+| Mofidul et al. [15] | Secured IIoT with edge/cloud AI | ESP32-S, MQTTS/TLS, PostgreSQL, Isolation Forest | Real hardware, per-appliance IF, strong security | Per-device models; field-specific | Justifies Isolation Forest, TLS/MQTT security, and sensor BOM |
+| Sathupadi et al. [16] | Edge–cloud synergy for anomaly detection | Edge detector + cloud model, score-gated escalation | Threshold-gated escalation; workload manager for latency/bandwidth/energy | Synthetic/industrial data; light on rigorous ground truth | Blueprint for the hybrid escalation architecture |
+| Huang et al. [17] | User-side energy management framework | Edge/fog/cloud, LSTM forecasting, DCT/PCA/Huffman compression | Concrete compression techniques and metrics | Broad scope; some results illustrative | Supplies storage/bandwidth optimization techniques and metrics |
 
-## 2.8 Research Gap
+## 2.9 Research Gap
 
 Existing work shows that smart energy monitoring systems can collect and
 display measurements, MQTT can support lightweight IoT messaging, edge/fog
@@ -241,3 +299,11 @@ intelligence can be added with low latency overhead.
 [12] A. Chatterjee and B. S. Ahmed, "IoT anomaly detection methods and applications: A survey," Internet of Things, 2022.
 
 [13] G. Huang, A. Anwar, S. W. Loke, A. Zaslavsky, and J. Choi, "IoT-based Analysis for Smart Energy Management," arXiv:2311.18643, 2023.
+
+[14] D. A. Verde Romero, E. Villalvazo Laureano, R. O. Jiménez Betancourt, and E. Navarro Álvarez, "An open source IoT edge-computing system for monitoring energy consumption in buildings," Results in Engineering, vol. 21, 101875, 2024.
+
+[15] R. B. Mofidul, M. M. Alam, M. H. Rahman, and Y. M. Jang, "Real-Time Energy Data Acquisition, Anomaly Detection, and Monitoring System: Implementation of a Secured, Robust, and Integrated Global IIoT Infrastructure with Edge and Cloud AI," Sensors, vol. 22, no. 22, 8980, 2022.
+
+[16] K. Sathupadi, S. Achar, S. V. Bhaskaran, N. Faruqui, M. Abdullah-Al-Wadud, and J. Uddin, "Edge-Cloud Synergy for AI-Enhanced Sensor Network Data: A Real-Time Predictive Maintenance Framework," Sensors, vol. 24, no. 24, 7918, 2024.
+
+[17] J. Huang, S. Zhou, G. Li, and Q. Shen, "Real-time monitoring and optimization methods for user-side energy management based on edge computing," Scientific Reports, vol. 15, 24890, 2025.

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from .config import Settings, get_settings
 from .logging_config import configure_logging
 from .services.alert_service import AlertService
+from .services.anomaly_detector import AnomalyDetector
 from .services.ingestion import IngestionService
 from .services.metrics_service import MetricsService
 from .services.rule_engine import RuleEngine
@@ -22,6 +23,7 @@ class AppContainer:
     settings: Settings
     validator: ValidationService
     rule_engine: RuleEngine
+    anomaly_detector: AnomalyDetector
     metrics: MetricsService
     storage_policy: StoragePolicyService
     alert_service: AlertService
@@ -38,12 +40,14 @@ def build_container() -> AppContainer:
 
     validator = ValidationService()
     rule_engine = RuleEngine()
+    anomaly_detector = AnomalyDetector(settings)
     metrics = MetricsService()
     storage_policy = StoragePolicyService(settings)
     alert_service = AlertService()
     ingestion = IngestionService(
         validator=validator,
         rule_engine=rule_engine,
+        anomaly_detector=anomaly_detector,
         alert_service=alert_service,
         metrics=metrics,
         storage_policy=storage_policy,
@@ -53,6 +57,7 @@ def build_container() -> AppContainer:
         settings=settings,
         validator=validator,
         rule_engine=rule_engine,
+        anomaly_detector=anomaly_detector,
         metrics=metrics,
         storage_policy=storage_policy,
         alert_service=alert_service,

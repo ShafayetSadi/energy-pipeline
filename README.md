@@ -18,6 +18,8 @@ flowchart LR
   structlog. Subscribes to `energy/+/telemetry`, `energy/+/status`,
   `energy/+/events`, validates payloads, applies the rule engine and storage
   policy, persists to TimescaleDB, and enqueues durable alert deliveries.
+- **Edge ML detector** — optional Isolation Forest anomaly detector (Phase 1),
+  trained by `scripts/train_anomaly_model.py`, loaded from `/app/models`.
 - **MQTT broker** — Eclipse Mosquitto (`config/mosquitto/mosquitto.conf`).
 - **Storage** — TimescaleDB hypertables for `energy_readings`, `events`,
   `system_metrics`, `device_status_history`; continuous aggregate
@@ -169,6 +171,28 @@ always stores raw readings. Retention defaults keep raw readings, system
 metrics, status history, alert deliveries, and completed outbox rows for 30
 days, quality logs for 14 days, and events indefinitely.
 
+## Edge ML anomaly detection (Phase 1)
+
+Beyond the rule engine, the gateway can run an unsupervised **Isolation Forest**
+anomaly detector at the edge (Phase 1 of a hybrid edge↔cloud direction). It is
+disabled by default; enable it with `ENABLE_ML=true`.
+
+```bash
+# Train + offline-evaluate the detector (writes models/anomaly_iforest.joblib
+# and results/anomaly_model/offline_evaluation.json)
+uv run python scripts/train_anomaly_model.py --evaluate
+
+# Online detection A/B: rules-only vs ml-only vs hybrid on labeled anomalies
+bash scripts/run_detection_ab_test.sh
+```
+
+The detector scores physics-informed features `[voltage_v, current_a, power_w,
+temperature_c, |voltage-220|, power - voltage*current]`, writes scores to
+`model_predictions`, and (with `ML_EMIT_EVENTS=true`) raises `ML_ANOMALY`
+events through the same path as rules. The artifact is mounted read-only into
+the gateway at `/app/models`. If ML is off or the artifact is missing, the
+detector disables itself and the gateway runs exactly as the rule-based system.
+
 ## Thesis validation and experiments
 
 ```bash
@@ -183,6 +207,10 @@ REPETITIONS=3 just ab-high-throughput
 
 # 4. run proposed-mode anomaly detection evidence
 just anomaly-detection
+
+# 5. train the edge ML detector and run the detection A/B
+uv run python scripts/train_anomaly_model.py --evaluate
+bash scripts/run_detection_ab_test.sh
 ```
 
 Run tests before the Docker experiments so broken scripts or gateway logic fail
@@ -216,5 +244,8 @@ repositories, scripts, and API smoke behavior.
 - Plug a new alert channel into `gateway/app/services/alert_service.py`
   (the webhook and Slack clients are already there; add an email
   implementation alongside them by setting `ALERT_SLACK_WEBHOOK_URL`).
-- Add ML predictions later by writing into the `model_predictions` table
-  — the schema is already in place.
+- Retrain the edge anomaly detector with
+  `uv run python scripts/train_anomaly_model.py --evaluate`; the gateway loads
+  the artifact from `/app/models/anomaly_iforest.joblib`.
+- Extend `model_predictions` toward forecasting / a cloud tier — the schema and
+  the edge scoring path are already in place.
