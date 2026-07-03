@@ -56,10 +56,12 @@ The defensible thesis claim is:
 
 Building on this baseline, the work adds an edge machine-learning detector
 (Phase 1, Section 5.5), so detection can be compared across rules-only,
-ml-only, and hybrid configurations. The current work does not yet claim a cloud
-tier, score-gated escalation, storage reduction, production-grade field
-deployment, certified metering accuracy, or large-scale smart-grid validation.
-These are treated as later phases and future work.
+ml-only, and hybrid configurations, and a score-gated edge-to-cloud escalation
+path (Phase 2, Section 5.6), so gated forwarding can be compared against a
+naive all-to-cloud baseline. The current work does not yet claim a cloud-side
+model, storage reduction, production-grade field deployment, certified
+metering accuracy, or large-scale smart-grid validation. These are treated as
+later phases and future work.
 
 ## 5.3 High-Throughput A/B Test Method
 
@@ -159,7 +161,41 @@ results/detection_ab/{rules,ml,hybrid}/
 This measures the *operational cost* of adding ML scoring to the live pipeline,
 complementing the offline detection-quality measurement.
 
-## 5.6 Metrics Collected
+## 5.6 Escalation Bandwidth A/B Method (Phase 2)
+
+The score-gated edge-to-cloud escalation (Section 4.10) is evaluated by
+`scripts/run_escalation_bandwidth_test.sh`, which runs the same labeled anomaly
+scenarios in two gateway configurations that differ *only* in the escalation
+gate:
+
+| Mode | Configuration |
+| --- | --- |
+| gated | `CLOUD_FORWARD_MODE=gated` — forward only readings whose anomaly score crosses the escalation threshold |
+| all | `CLOUD_FORWARD_MODE=all` — forward every scored reading (naive all-to-cloud baseline) |
+
+Both modes run the full hybrid pipeline (rules + async ML scoring + event
+emission) and the cloud-tier receiver, so the comparison isolates the gate.
+For each mode the script captures the gateway's forwarding counters
+(`cloud.forwarded`, `cloud.batches`, `cloud.bytes_sent`,
+`cloud.forward_failed`, `cloud_forward` latency) and the cloud tier's
+independent receive counters (readings, batches, bytes), then computes the
+byte and reading reduction of gated relative to all-to-cloud in
+`bandwidth-summary.json`, under:
+
+```text
+results/escalation_bandwidth/{gated,all}/
+```
+
+Counting payload bytes on both the sending and receiving side guards against
+measurement error: the two totals must agree for a run to be valid. The
+measured quantity is application-payload bytes (the JSON envelope), not
+wire-level bytes including HTTP and TCP/IP overhead; because batching gives
+both modes similar per-batch overhead, the payload-byte ratio is the honest
+comparison statistic. The expected reduction follows from the gate: in gated
+mode the forwarded volume tracks the model's flag rate (roughly 7% of readings
+in the detection A/B scenarios) rather than the full telemetry stream.
+
+## 5.7 Metrics Collected
 
 The evaluation used both simulator-side and gateway-side metrics.
 
@@ -195,7 +231,7 @@ discussion, not as a storage-optimization result. Both modes store raw
 readings, and the proposed mode also stores event evidence. Therefore, the
 current experiment does not support a storage-reduction claim.
 
-## 5.7 Data Collection Procedure
+## 5.8 Data Collection Procedure
 
 The high-throughput A/B test and anomaly detection experiment generated
 machine-readable and human-readable artifacts.
@@ -235,7 +271,7 @@ Grafana dashboards were used as visual evidence that readings, events,
 validation behavior, and system metrics can be inspected during and after the
 experiments.
 
-## 5.8 Experimental Limitations
+## 5.9 Experimental Limitations
 
 The evaluation has several limitations.
 

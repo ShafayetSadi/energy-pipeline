@@ -75,6 +75,22 @@ class Settings(BaseSettings):
     ml_batch_window_ms: int = 50
     ml_queue_max_size: int = 20000
 
+    # Edge->cloud escalation (Phase 2). Scored readings can be forwarded to a
+    # cloud tier: "off" forwards nothing, "gated" forwards only readings whose
+    # anomaly score crosses the escalation threshold, "all" forwards every
+    # scored reading (the naive all-to-cloud baseline for the bandwidth A/B).
+    # Forwarding runs off the scoring worker, so it requires ENABLE_ML and
+    # ML_ASYNC_SCORING.
+    cloud_forward_mode: str = "off"
+    cloud_endpoint_url: str = "http://cloud-tier:8000/api/v1/escalations"
+    # Score at or above which a reading is escalated in "gated" mode. Empty ->
+    # use the model's own anomaly threshold (escalate exactly the flagged set).
+    cloud_escalation_threshold: float | None = None
+    cloud_forward_batch_max_size: int = 64
+    cloud_forward_batch_window_ms: int = 1000
+    cloud_forward_queue_max_size: int = 20000
+    cloud_forward_timeout_seconds: float = 5.0
+
     voltage_min: float = 0.0
     voltage_max: float = 300.0
     current_min: float = 0.0
@@ -125,6 +141,13 @@ class Settings(BaseSettings):
             raise ValueError(
                 "storage_policy must be one of: raw, hybrid, event_only, aggregate_only"
             )
+        return value
+
+    @field_validator("cloud_forward_mode")
+    @classmethod
+    def _validate_cloud_forward_mode(cls, value: str) -> str:
+        if value not in {"off", "gated", "all"}:
+            raise ValueError("cloud_forward_mode must be one of: off, gated, all")
         return value
 
     @field_validator("supported_schema_versions")

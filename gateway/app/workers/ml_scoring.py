@@ -28,6 +28,7 @@ from ..services.alert_service import AlertService
 from ..services.anomaly_detector import AnomalyDetector
 from ..services.metrics_service import MetricsService
 from ..services.rule_engine import RuleEngine, RuleHit
+from .cloud_forwarder import CloudForwarderWorker, EscalationJob
 
 logger = get_logger(__name__)
 
@@ -50,12 +51,14 @@ class MLScoringWorker:
         rule_engine: RuleEngine,
         alert_service: AlertService,
         metrics: MetricsService,
+        cloud_forwarder: CloudForwarderWorker | None = None,
     ) -> None:
         self._settings = get_settings()
         self._detector = detector
         self._rule_engine = rule_engine
         self._alert_service = alert_service
         self._metrics = metrics
+        self._cloud_forwarder = cloud_forwarder
         self._queue: asyncio.Queue[ScoringJob] = asyncio.Queue(
             maxsize=self._settings.ml_queue_max_size
         )
@@ -169,6 +172,23 @@ class MLScoringWorker:
                     continue
                 self._metrics.incr("ml.scored")
                 payload = job.reading
+                # Phase 2 escalation gate: hand scored readings to the cloud
+                # forwarder, which applies the gate ("gated" vs "all") itself.
+                forwarder = self._cloud_forwarder
+                if (
+                    forwarder is not None
+                    and forwarder.enabled
+                    and forwarder.should_escalate(result)
+                ):
+                    self._metrics.incr("cloud.escalation_candidates")
+                    forwarder.enqueue(
+                        EscalationJob(
+                            reading=payload,
+                            reading_time=job.reading_time,
+                            result=result,
+                            rule_fired=job.rule_fired,
+                        )
+                    )
                 await prediction_repo.insert_prediction(
                     session,
                     time=job.reading_time,

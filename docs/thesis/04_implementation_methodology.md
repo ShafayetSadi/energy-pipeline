@@ -255,7 +255,48 @@ The `ML_ASYNC_SCORING` flag (default true) switches between this worker and the
 original inline path, which allows the inline-versus-batched comparison in
 Section 6.7.1.
 
-## 4.10 Metrics and Alert Workflow
+## 4.10 Edge-to-Cloud Escalation Gate (Phase 2)
+
+The hybrid architecture's second phase adds a score-gated escalation path from
+the edge gateway to a cloud tier, implemented in
+`gateway/app/workers/cloud_forwarder.py` and a minimal receiver service in
+`cloud/app/main.py`.
+
+**Escalation gate.** After the ML scoring worker scores a batch, each scored
+reading is offered to the cloud forwarder, which applies the gate configured
+by `CLOUD_FORWARD_MODE`:
+
+- `off` (default) — nothing leaves the edge; the gateway behaves exactly as in
+  Phase 1.
+- `gated` — only readings whose anomaly score crosses the escalation threshold
+  are forwarded. By default the gate reuses the model's own anomaly threshold
+  (escalating exactly the flagged set); `CLOUD_ESCALATION_THRESHOLD` can set a
+  stricter score cut-off independently of event emission.
+- `all` — every scored reading is forwarded. This is the naive
+  all-data-to-cloud baseline: both modes run the identical pipeline, so a
+  gated-versus-all comparison isolates the gate as the only variable.
+
+**Forwarding worker.** Escalated readings are queued and sent in batches
+(bounded by `CLOUD_FORWARD_BATCH_MAX_SIZE` or `CLOUD_FORWARD_BATCH_WINDOW_MS`)
+as a compact JSON envelope over HTTP POST. Each forwarded reading carries the
+measurement fields plus its anomaly score, threshold, model version, and
+whether a rule also fired — enough context for a cloud-side model to act
+without a follow-up query. The gateway counts forwarded readings, batches, and
+payload bytes (`cloud.forwarded`, `cloud.batches`, `cloud.bytes_sent`) and
+records a `cloud_forward` latency series. Failures are counted
+(`cloud.forward_failed`) and the batch is dropped rather than retried: edge
+detection never depends on cloud reachability, preserving the edge-first
+principle.
+
+**Cloud tier.** The receiver (`cloud-tier` in Docker Compose) is deliberately
+minimal in this phase: it validates the envelope, counts batches, readings,
+and received bytes, and keeps a bounded in-memory buffer of recent escalations
+for inspection. It persists nothing and hosts no model yet — the heavier
+cloud-side forecasting model is a later phase. Its role here is to terminate
+the escalation path so bandwidth can be measured end to end
+(`scripts/run_escalation_bandwidth_test.sh`, Section 5.6).
+
+## 4.11 Metrics and Alert Workflow
 
 The metrics service keeps in-memory counters and latency samples, then
 periodically flushes them to `system_metrics`. The exported metrics include
@@ -278,7 +319,7 @@ alert records can be queued in `alert_outbox`. A background worker can process
 pending alerts and record delivery results. This separates detection from
 delivery and prevents a notification failure from blocking event persistence.
 
-## 4.11 Dashboard Implementation
+## 4.12 Dashboard Implementation
 
 Grafana is provisioned from files under `config/grafana`. The datasource is
 configured to connect to TimescaleDB, and dashboard JSON files are loaded into
@@ -298,7 +339,7 @@ The dashboards are designed to support both operation and thesis evidence.
 They do not replace the exported result files, but they visually confirm that
 readings, events, data-quality behavior, and system metrics are observable.
 
-## 4.12 Docker-Based Deployment
+## 4.13 Docker-Based Deployment
 
 Docker Compose is used to run the local system. The main services are:
 
@@ -317,7 +358,7 @@ makes it possible to switch between baseline and proposed modes and between
 rules-only, ml-only, and hybrid detection for evaluation. The trained model
 artifact is mounted read-only at `/app/models/anomaly_iforest.joblib`.
 
-## 4.13 Testing Strategy
+## 4.14 Testing Strategy
 
 The testing strategy combines automated tests and scripted system experiments.
 
@@ -359,7 +400,7 @@ This strategy keeps the thesis evaluation reproducible. The automated tests
 verify the implementation pieces, while the experiment scripts generate the
 evidence used in Chapter 6.
 
-## 4.14 Chapter Summary
+## 4.15 Chapter Summary
 
 The implementation follows the proposed architecture closely. MQTT messages
 enter through Mosquitto, the FastAPI gateway validates and processes them,

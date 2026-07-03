@@ -14,6 +14,7 @@ from .services.storage_policy import StoragePolicyService
 from .services.validation_service import ValidationService
 from .workers.aggregation_worker import AggregationWorker
 from .workers.alert_outbox import AlertOutboxWorker
+from .workers.cloud_forwarder import CloudForwarderWorker
 from .workers.device_heartbeat import DeviceHeartbeatWorker
 from .workers.ml_scoring import MLScoringWorker
 from .workers.mqtt_consumer import MQTTConsumerWorker
@@ -29,6 +30,7 @@ class AppContainer:
     storage_policy: StoragePolicyService
     alert_service: AlertService
     ingestion: IngestionService
+    cloud_forwarder_worker: CloudForwarderWorker
     ml_scoring_worker: MLScoringWorker
     mqtt_worker: MQTTConsumerWorker
     heartbeat_worker: DeviceHeartbeatWorker
@@ -46,11 +48,13 @@ def build_container() -> AppContainer:
     metrics = MetricsService()
     storage_policy = StoragePolicyService(settings)
     alert_service = AlertService()
+    cloud_forwarder_worker = CloudForwarderWorker(metrics=metrics)
     ml_scoring_worker = MLScoringWorker(
         detector=anomaly_detector,
         rule_engine=rule_engine,
         alert_service=alert_service,
         metrics=metrics,
+        cloud_forwarder=cloud_forwarder_worker,
     )
     ingestion = IngestionService(
         validator=validator,
@@ -71,6 +75,7 @@ def build_container() -> AppContainer:
         storage_policy=storage_policy,
         alert_service=alert_service,
         ingestion=ingestion,
+        cloud_forwarder_worker=cloud_forwarder_worker,
         ml_scoring_worker=ml_scoring_worker,
         mqtt_worker=MQTTConsumerWorker(ingestion=ingestion, metrics=metrics),
         heartbeat_worker=DeviceHeartbeatWorker(

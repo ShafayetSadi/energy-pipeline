@@ -74,11 +74,22 @@ services:
       ML_EMIT_EVENTS: ${ML_EMIT_EVENTS:-false}
       ML_ASYNC_SCORING: ${ML_ASYNC_SCORING:-true}
       ML_MODEL_PATH: ${ML_MODEL_PATH:-/app/models/anomaly_iforest.joblib}
+      CLOUD_FORWARD_MODE: ${CLOUD_FORWARD_MODE:-off}
+      CLOUD_ENDPOINT_URL: ${CLOUD_ENDPOINT_URL:-http://cloud-tier:8000/api/v1/escalations}
     ports:
       - "8001:8000"
     volumes:
       - ./gateway/config:/app/config:ro
       - ./models:/app/models:ro
+
+  cloud-tier:
+    build:
+      context: ./cloud
+      dockerfile: Dockerfile
+    container_name: wattflow-cloud-tier
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
 
   grafana:
     image: grafana/grafana:11.2.0

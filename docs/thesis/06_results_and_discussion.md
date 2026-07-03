@@ -328,6 +328,25 @@ intelligence has an observable storage cost; it is not a storage-reduction
 result. Persisting a prediction per reading is the main ML storage contributor
 and is a candidate for the selective-retention work in a later phase.
 
+### 6.7.2 Escalation bandwidth A/B (Phase 2)
+
+Phase 2 adds the score-gated edge-to-cloud escalation path (Sections 3.9 and
+4.10): scored readings whose anomaly score crosses the escalation threshold
+are batched and forwarded to a minimal cloud-tier receiver, and both sides
+count forwarded readings and payload bytes. The evaluation compares `gated`
+forwarding against the naive `all`-to-cloud baseline under the identical
+pipeline (Section 5.6), so the gate is the only variable.
+
+The path is implemented and verified end to end (a functional test confirmed
+that flagged readings arrive at the cloud tier with matching byte counts on
+the sending and receiving side, while normal readings are not forwarded), but
+the bandwidth A/B has not yet been run; its measured reduction will be
+reported here. The expected outcome follows from the gate by construction —
+gated volume tracks the model's flag rate (roughly 7% of readings in the
+detection A/B scenarios) rather than the full stream — but consistent with the
+measurement-only policy of this thesis, no reduction percentage is claimed
+until measured.
+
 ## 6.8 Database Size Discussion
 
 Database size was measured before and after the clean high-throughput A/B

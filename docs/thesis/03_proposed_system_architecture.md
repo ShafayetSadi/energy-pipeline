@@ -39,9 +39,9 @@ FastAPI edge gateway
         v
 PostgreSQL/TimescaleDB
         |
-        |  (planned) score-gated escalation of flagged windows
-        v ----------------------------------> Cloud tier (future phase:
-        |                                      heavier model / forecasting)
+        |  score-gated escalation of flagged readings (Phase 2)
+        v ----------------------------------> Cloud tier (receiver implemented;
+        |                                      heavier model = future phase)
         v
 Grafana dashboards and REST API clients
 ```
@@ -53,8 +53,9 @@ The architecture follows five principles:
 3. Store time-series data in a database designed for time-window queries.
 4. Make validation, latency, throughput, and event counts observable.
 5. Add edge intelligence incrementally — rule-based detection first, then a
-   lightweight ML detector at the edge (Phase 1), with a cloud tier and
-   score-gated escalation staged as later phases.
+   lightweight ML detector at the edge (Phase 1), then score-gated escalation
+   to a cloud tier (Phase 2), with the cloud-side model staged as a later
+   phase.
 
 ## 3.2 Energy Monitoring Node Layer
 
@@ -297,9 +298,21 @@ behaves exactly as the rule-based system, so the baseline path carries no ML
 dependency.
 
 This realises the edge-AI direction that Verde Romero et al. [14] named as
-future work. The remaining elements of the hybrid design — a cloud tier and
-score-gated escalation of flagged windows (Sathupadi et al. [16]) and
-edge-side storage/bandwidth optimization (Huang et al. [17]) — are staged as
+future work.
+
+**Score-gated escalation (Phase 2).** The scoring worker's queue doubles as
+the substrate for the hybrid design's escalation path (following the
+edge-gates-cloud pattern of Sathupadi et al. [16]): scored readings are
+offered to a cloud forwarder that, depending on `CLOUD_FORWARD_MODE`, forwards
+nothing (`off`, the default), only readings whose anomaly score crosses the
+escalation threshold (`gated`), or every scored reading (`all` — the naive
+all-to-cloud baseline used for the bandwidth comparison). Forwarded readings
+are batched into compact JSON envelopes carrying the measurements plus score,
+threshold, and model version, and POSTed to a minimal cloud-tier receiver that
+counts what it receives. Forward failures are counted and dropped rather than
+retried, so edge detection never depends on cloud reachability. The remaining
+elements of the hybrid design — a heavier cloud-side model on the escalated
+stream and edge-side storage optimization (Huang et al. [17]) — are staged as
 later phases and are not claimed as results here.
 
 ## 3.10 Chapter Summary

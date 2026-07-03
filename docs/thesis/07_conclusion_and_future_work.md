@@ -58,8 +58,12 @@ The project makes the following contributions:
 8. It implements and offline-evaluates an edge Isolation Forest anomaly
    detector (Phase 1) that scores readings into `model_predictions` and can
    raise ML events, enabling rules-only, ml-only, and hybrid comparison.
-9. It provides database and architecture extension points for the cloud tier,
-   score-gated escalation, and storage optimization in later phases.
+9. It implements a score-gated edge-to-cloud escalation path (Phase 2): an
+   asynchronous forwarder that escalates only flagged readings to a minimal
+   cloud-tier receiver, with payload bytes counted on both sides so gated
+   forwarding can be compared against an all-to-cloud baseline.
+10. It provides database and architecture extension points for the cloud-side
+    model and storage optimization in later phases.
 
 ## 7.3 Answers to Research Questions
 
@@ -83,9 +87,10 @@ The fourth research question asked how ready the platform is for AI/ML
 extension. Phase 1 answers it concretely: an edge Isolation Forest detector is
 implemented and offline-evaluated, scoring readings into `model_predictions`
 and optionally raising ML events through the same path as rules. The platform
-is no longer ML-ready only in principle — it runs a working edge ML detector —
-while the cloud tier, score-gated escalation, and storage optimization are
-staged as later phases.
+is no longer ML-ready only in principle — it runs a working edge ML detector,
+and Phase 2 adds a score-gated escalation path to a cloud-tier receiver —
+while the cloud-side model and storage optimization are staged as later
+phases.
 
 ## 7.4 Limitations
 
@@ -125,12 +130,14 @@ offline (precision, recall, false positives, per-type recall) and ran an online
 rules/ml/hybrid A/B (Section 6.7.1) measuring the operational cost — latency,
 event counts, and storage — of ML scoring in the live gateway.
 
+Phase 2 (implemented; bandwidth measurement pending, Section 6.7.2) added the
+score-gated escalation path: an asynchronous cloud forwarder in the gateway
+and a minimal cloud-tier receiver, with a gated-versus-all-to-cloud bandwidth
+A/B (Sathupadi et al.).
+
 Remaining phases follow the hybrid edge–cloud direction motivated by the
 literature (Chapter 2.7):
 
-- **Phase 2 — Escalation gate.** Forward only readings flagged at the edge to a
-  cloud tier, and measure the bandwidth saved versus sending all data
-  (Sathupadi et al.).
 - **Phase 3 — Cloud-tier model.** A heavier model (e.g. LSTM) in the cloud for
   failure prediction or load forecasting on escalated windows.
 - **Phase 4 — Storage optimization.** Selective retention, downsampling, and
