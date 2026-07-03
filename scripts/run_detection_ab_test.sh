@@ -104,6 +104,9 @@ run_mode() {
 }
 
 mkdir -p "${BASE_OUTPUT}"
+# Rebuild so the gateway image matches the working tree (app code is baked
+# into the image; only config/ and models/ are bind-mounted).
+docker compose build edge-gateway
 for mode in rules ml hybrid; do
   run_mode "${mode}"
 done

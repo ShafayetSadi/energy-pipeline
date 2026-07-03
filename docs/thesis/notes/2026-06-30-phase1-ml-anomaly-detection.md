@@ -138,8 +138,25 @@ and returns; worker drains the queue in batches (`ML_BATCH_MAX_SIZE`=128,
 then writes predictions + ML events (same cooldown/alert path). `ML_ASYNC_SCORING`
 (default true) toggles inline vs batched for the comparison. Also doubles as the
 queue substrate for Phase 2's escalation gate. 50 tests pass, lint clean.
-**Re-run the A/B (async default) to capture the "after" latency** for Section
-6.7.1 (expected: telemetry back to ~7 ms).
+
+**After-measurement (2026-07-03).** A first re-run was invalid: the compose
+image predated the async-worker commit (app code is baked into the image; only
+`config/` and `models/` are bind-mounted), so it silently re-ran inline
+scoring. `run_detection_ab_test.sh` now does `docker compose build
+edge-gateway` up front. The rebuilt run confirms the fix:
+
+| Mode (async) | Telemetry avg / p99 | ML inference avg / p99 | ml_queue avg / p99 |
+| --- | --- | --- | --- |
+| rules | 6.72 / 9.61 ms | – | – |
+| ml | 6.35 / 10.35 ms | 10.42 / 15.63 ms | 48.75 / 54.97 ms |
+| hybrid | 6.65 / 9.96 ms | 10.41 / 13.82 ms | 49.02 / 54.87 ms |
+
+Telemetry is back at the rules baseline; the scoring cost moved off the hot
+path into a ~49 ms enqueue-to-score delay dominated by the 50 ms batch window.
+Caveat: at ~2.3 msg/s the average batch was only ~1.1 readings (1,256–1,268
+batches for ~1,376 scored), so this run demonstrates the decoupling, not the
+batch amortisation — that needs a higher-rate test. Written into Section 6.7.1
+as the before/after pair; `results/detection_ab/` now holds this run.
 
 ## Next phases
 

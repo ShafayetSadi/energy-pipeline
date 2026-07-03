@@ -1,37 +1,37 @@
 {
-    "uptime_seconds": 610.5308226769994,
+    "uptime_seconds": 603.3817559320005,
     "counters": {
-        "messages.received": 1428,
+        "messages.received": 1418,
         "validation.telemetry.success": 1379,
         "messages.telemetry": 1379,
         "readings.stored": 1379,
-        "events.critical": 252,
-        "events.type.overload": 242,
-        "events.warning": 400,
-        "events.type.power_spike": 355,
-        "validation.status.success": 49,
-        "messages.status": 49,
+        "events.warning": 535,
+        "events.type.power_spike": 490,
         "events.type.under_voltage": 30,
         "events.info": 30,
         "events.type.voltage_anomaly": 30,
+        "validation.status.success": 39,
+        "messages.status": 39,
+        "events.critical": 32,
         "events.type.device_failure": 10,
         "devices.offline_detected": 10,
-        "events.type.over_voltage": 15
+        "events.type.over_voltage": 15,
+        "events.type.overload": 22
     },
     "latencies": {
         "telemetry": {
             "count": 1379.0,
-            "avg_ms": 6.721606783181392,
-            "p50_ms": 6.565525000041816,
-            "p95_ms": 8.331114000611706,
-            "p99_ms": 9.712799001135863
+            "avg_ms": 6.716294324155223,
+            "p50_ms": 6.5758340006141225,
+            "p95_ms": 8.093528000244987,
+            "p99_ms": 9.60614900031942
         },
         "status": {
-            "count": 49.0,
-            "avg_ms": 5.6263571223469775,
-            "p50_ms": 5.307994999384391,
-            "p95_ms": 6.45516199983831,
-            "p99_ms": 7.117365999874892
+            "count": 39.0,
+            "avg_ms": 5.4728837949136135,
+            "p50_ms": 5.283274000248639,
+            "p95_ms": 6.5384380004616105,
+            "p99_ms": 6.803588999900967
         }
     }
 }

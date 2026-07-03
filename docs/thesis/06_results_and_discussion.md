@@ -241,7 +241,7 @@ The online A/B (`scripts/run_detection_ab_test.sh`) ran the same labeled
 anomaly scenarios (undervoltage, overload, power_spike) in three live gateway
 configurations. It measures the *operational cost* of ML scoring, separate from
 the offline detection-quality result above. The three modes processed a
-comparable input volume (1,375–1,379 telemetry messages); small differences and
+comparable input volume (1,376–1,379 telemetry messages); small differences and
 the per-mode event counts reflect the random component of the scenarios and so
 should be read as indicative rather than exact like-for-like.
 
@@ -267,22 +267,45 @@ under 25 ms at the tested throughput.
 In response, scoring was moved into an asynchronous micro-batch worker
 (Section 4.9, `ML_ASYNC_SCORING`, now the default): the telemetry handler
 enqueues each reading and returns immediately, and the worker scores readings
-in batches off the hot path. This is expected to return telemetry latency to
-rule-engine levels (~7 ms) while amortising inference across the batch. The
-inline-versus-batched re-measurement is pending a re-run of the A/B and will be
-added here; the table above is retained as the inline baseline.
+in batches off the hot path. Re-running the A/B with asynchronous scoring
+enabled gives the "after" measurement:
 
-**Detection output.** Counts of generated events and ML scores by mode:
+| Mode (async scoring) | Telemetry avg | Telemetry p99 | ML inference avg / p99 | Queue delay avg / p99 |
+| --- | ---: | ---: | ---: | ---: |
+| rules | 6.72 ms | 9.61 ms | – | – |
+| ml | 6.35 ms | 10.35 ms | 10.42 / 15.63 ms | 48.75 / 54.97 ms |
+| hybrid | 6.65 ms | 9.96 ms | 10.41 / 13.82 ms | 49.02 / 54.87 ms |
+
+Telemetry processing latency returned to the rule-only baseline (~6.4–6.7 ms
+average in all three modes): ML scoring no longer adds measurable cost to the
+ingestion hot path. The cost did not disappear — it moved. The new `ml_queue`
+series measures the delay from enqueueing a reading to its score being
+available, ~49 ms average, dominated by the worker's 50 ms batch-collection
+window. An `ML_ANOMALY` event therefore trails its reading by roughly the
+batch window plus inference, still far below any actionable alerting
+timescale. Two honest caveats: first, at the tested throughput (~2.3 msg/s)
+the worker collected an average batch of only ~1.1 readings
+(1,256–1,268 batches for ~1,376 scored), so per-batch inference remains
+~10 ms and the amortisation benefit of batching (~0.014 ms per row, Section
+4.9) would only materialise at higher message rates — what this experiment
+demonstrates is the decoupling, not the amortisation. Second, the two runs
+were taken on the same host but at different times, so small cross-run
+differences in absolute numbers reflect ordinary load variance; the
+within-run comparison against the rules mode is the controlled one.
+
+**Detection output.** Counts of generated events and ML scores by mode (from
+the async-scoring run, which is the evidence retained under
+`results/detection_ab/`):
 
 | Signal | rules | ml | hybrid |
 | --- | ---: | ---: | ---: |
-| Rule events (OVERLOAD/POWER_SPIKE/…) | 642 | 0 | 660 |
-| `ML_ANOMALY` events | 0 | 9 | 7 |
-| `model_predictions` rows | 0 | 1,376 | 1,375 |
-| Readings scored anomalous (`ml.anomalies`) | – | 104 | 94 |
+| Rule events (OVERLOAD/POWER_SPIKE/…) | 587 | 0 | 526 |
+| `ML_ANOMALY` events | 0 | 6 | 5 |
+| `model_predictions` rows | 0 | 1,379 | 1,376 |
+| Readings scored anomalous (`ml.anomalies`) | – | 93 | 88 |
 
-Two points stand out. First, the ml-only mode flagged 104 readings as anomalous
-but emitted only 9 `ML_ANOMALY` events: the per-device cooldown collapses a
+Two points stand out. First, the ml-only mode flagged 93 readings as anomalous
+but emitted only 6 `ML_ANOMALY` events: the per-device cooldown collapses a
 burst of anomalous readings during an anomaly window into a single event, which
 is the intended behaviour for alert hygiene. Second, the hybrid mode produces
 the union — the full set of rule events plus a small number of ML events — so a
@@ -295,9 +318,9 @@ per-reading ground-truth labels.
 
 | Mode | Before | After | Growth |
 | --- | ---: | ---: | ---: |
-| rules | 9.94 MB | 11.91 MB | 1.97 MB |
-| ml | 10.01 MB | 12.04 MB | 2.03 MB |
-| hybrid | 10.01 MB | 12.54 MB | 2.53 MB |
+| rules | 10.01 MB | 11.91 MB | 1.90 MB |
+| ml | 10.01 MB | 12.11 MB | 2.11 MB |
+| hybrid | 10.01 MB | 12.55 MB | 2.55 MB |
 
 Hybrid stored the most because it writes rule events, a `model_prediction` row
 for every reading, and ML events. As in Section 6.8, this confirms that added

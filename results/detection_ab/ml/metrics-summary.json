@@ -1,41 +1,49 @@
 {
-    "uptime_seconds": 604.1425464789991,
+    "uptime_seconds": 604.8321389060002,
     "counters": {
         "messages.received": 1425,
-        "validation.telemetry.success": 1376,
-        "messages.telemetry": 1376,
-        "ml.scored": 1376,
-        "readings.stored": 1376,
-        "ml.anomalies": 104,
-        "events.warning": 9,
-        "events.type.ml_anomaly": 9,
-        "validation.status.success": 49,
-        "messages.status": 49,
+        "validation.telemetry.success": 1379,
+        "messages.telemetry": 1379,
+        "readings.stored": 1379,
+        "ml.batches": 1256,
+        "ml.scored": 1379,
+        "ml.anomalies": 93,
+        "events.warning": 6,
+        "events.type.ml_anomaly": 6,
+        "validation.status.success": 46,
+        "messages.status": 46,
         "events.critical": 10,
         "events.type.device_failure": 10,
         "devices.offline_detected": 10
     },
     "latencies": {
-        "ml_inference": {
-            "count": 1376.0,
-            "avg_ms": 11.84587501086695,
-            "p50_ms": 11.637383999186568,
-            "p95_ms": 13.429038999674958,
-            "p99_ms": 16.278373999739415
-        },
         "telemetry": {
-            "count": 1376.0,
-            "avg_ms": 19.300358651172022,
-            "p50_ms": 19.046613000682555,
-            "p95_ms": 21.50554999934684,
-            "p99_ms": 24.977031000162242
+            "count": 1379.0,
+            "avg_ms": 6.354116735316541,
+            "p50_ms": 6.243523000193818,
+            "p95_ms": 7.639567000296665,
+            "p99_ms": 10.351906000323652
+        },
+        "ml_inference": {
+            "count": 1379.0,
+            "avg_ms": 10.421058217557821,
+            "p50_ms": 11.015741999472084,
+            "p95_ms": 13.111838999975589,
+            "p99_ms": 15.628539999852364
+        },
+        "ml_queue": {
+            "count": 1379.0,
+            "avg_ms": 48.74794993980703,
+            "p50_ms": 50.816119000046456,
+            "p95_ms": 51.73567499969067,
+            "p99_ms": 54.96553699958895
         },
         "status": {
-            "count": 49.0,
-            "avg_ms": 5.57353508171515,
-            "p50_ms": 5.434333999801311,
-            "p95_ms": 6.581505000212928,
-            "p99_ms": 7.122374001482967
+            "count": 46.0,
+            "avg_ms": 5.7202745652316285,
+            "p50_ms": 5.189529999370279,
+            "p95_ms": 7.621533000019554,
+            "p99_ms": 9.47056800032442
         }
     }
 }
