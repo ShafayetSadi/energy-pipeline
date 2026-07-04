@@ -6,12 +6,10 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT="$( cd "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd )"
 OUTPUT_DIR="${OUTPUT_DIR:-${ROOT}/results/anomaly_detection/proposed}"
 
-cd "${ROOT}"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
 
-run_migrations() {
-  DATABASE_URL="${ALEMBIC_DATABASE_URL:-postgresql+asyncpg://energy:energy@127.0.0.1:54329/energy_monitoring}" \
-    uv run alembic -c database/migrations/alembic.ini upgrade head
-}
+cd "${ROOT}"
 
 wait_for_gateway() {
   echo "Waiting for edge gateway to be ready..."
@@ -56,6 +54,7 @@ export ENABLE_ALERTS=true
 
 docker compose up -d timescaledb mosquitto grafana
 echo "Running database migrations..."
+wait_for_timescaledb
 run_migrations
 docker compose up -d edge-gateway
 wait_for_gateway

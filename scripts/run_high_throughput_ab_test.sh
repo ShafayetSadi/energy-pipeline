@@ -8,12 +8,10 @@ REPETITIONS="${REPETITIONS:-3}"
 SCENARIO_FILE="${SCENARIO_FILE:-/app/scenarios/high_throughput.yaml}"
 BASE_OUTPUT_DIR="${BASE_OUTPUT_DIR:-${ROOT}/results/ab/high_throughput}"
 
-cd "${ROOT}"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
 
-run_migrations() {
-  DATABASE_URL="${ALEMBIC_DATABASE_URL:-postgresql+asyncpg://energy:energy@127.0.0.1:54329/energy_monitoring}" \
-    uv run alembic -c database/migrations/alembic.ini upgrade head
-}
+cd "${ROOT}"
 
 wait_for_gateway() {
   echo "Waiting for edge gateway to be ready..."
@@ -61,6 +59,7 @@ run_single() {
 
   docker compose up -d timescaledb mosquitto grafana
   echo "Running database migrations..."
+  wait_for_timescaledb
   run_migrations
   docker compose up -d edge-gateway
   wait_for_gateway

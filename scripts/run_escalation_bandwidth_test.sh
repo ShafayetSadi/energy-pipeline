@@ -14,17 +14,15 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT="$( cd "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd )"
 BASE_OUTPUT="${OUTPUT_DIR:-${ROOT}/results/escalation_bandwidth}"
 
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
 cd "${ROOT}"
 
 if [[ ! -f "${ROOT}/models/anomaly_iforest.joblib" ]]; then
   echo "Model artifact missing. Run: uv run python scripts/train_anomaly_model.py --evaluate" >&2
   exit 1
 fi
-
-run_migrations() {
-  DATABASE_URL="${ALEMBIC_DATABASE_URL:-postgresql+asyncpg://energy:energy@127.0.0.1:54329/energy_monitoring}" \
-    uv run alembic -c database/migrations/alembic.ini upgrade head
-}
 
 wait_for_service() {
   local name="$1" url="$2"
@@ -69,6 +67,7 @@ run_mode() {
   export CLOUD_FORWARD_MODE="${mode}"
 
   docker compose up -d timescaledb mosquitto cloud-tier
+  wait_for_timescaledb
   run_migrations
   docker compose up -d edge-gateway
   wait_for_service "edge gateway" http://localhost:8001/ready

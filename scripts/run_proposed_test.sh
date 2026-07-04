@@ -4,6 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT="$( cd "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd )"
 
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
 cd "${ROOT}"
 
 echo "Restarting stack in proposed mode..."
@@ -15,8 +18,8 @@ export ENABLE_ALERTS=true
 
 docker compose up -d timescaledb mosquitto grafana
 echo "Running database migrations..."
-DATABASE_URL="${ALEMBIC_DATABASE_URL:-postgresql+asyncpg://energy:energy@127.0.0.1:54329/energy_monitoring}" \
-  uv run alembic -c database/migrations/alembic.ini upgrade head
+wait_for_timescaledb
+run_migrations
 docker compose up -d edge-gateway
 echo "Waiting for edge gateway to be ready..."
 for i in {1..30}; do
