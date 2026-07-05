@@ -1,0 +1,14 @@
+{
+    "uptime_seconds": 615.1151680059993,
+    "counters": {
+        "escalations.batches": 398,
+        "escalations.readings": 1378,
+        "escalations.bytes_received": 452381,
+        "escalations.mode.all": 1378,
+        "escalations.device.house_0003": 300,
+        "escalations.device.house_0004": 300,
+        "escalations.device.house_0005": 178,
+        "escalations.device.house_0002": 300,
+        "escalations.device.house_0001": 300
+    }
+}
