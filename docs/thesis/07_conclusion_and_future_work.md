@@ -62,8 +62,9 @@ The project makes the following contributions:
    asynchronous forwarder that escalates only flagged readings to a minimal
    cloud-tier receiver, with payload bytes counted on both sides so gated
    forwarding can be compared against an all-to-cloud baseline.
-10. It provides database and architecture extension points for the cloud-side
-    model and storage optimization in later phases.
+10. It hosts a cloud-side LSTM-autoencoder verifier on the escalated stream
+    (Phase 3) and provides extension points for storage optimization in a
+    later phase.
 
 ## 7.3 Answers to Research Questions
 
@@ -88,9 +89,9 @@ extension. Phase 1 answers it concretely: an edge Isolation Forest detector is
 implemented and offline-evaluated, scoring readings into `model_predictions`
 and optionally raising ML events through the same path as rules. The platform
 is no longer ML-ready only in principle — it runs a working edge ML detector,
-and Phase 2 adds a score-gated escalation path to a cloud-tier receiver —
-while the cloud-side model and storage optimization are staged as later
-phases.
+Phase 2 adds a score-gated escalation path to a cloud-tier receiver, and
+Phase 3 adds a cloud-side LSTM-autoencoder verifier on the escalated stream —
+while storage optimization is staged as a later phase.
 
 ## 7.4 Limitations
 
@@ -130,16 +131,28 @@ offline (precision, recall, false positives, per-type recall) and ran an online
 rules/ml/hybrid A/B (Section 6.7.1) measuring the operational cost — latency,
 event counts, and storage — of ML scoring in the live gateway.
 
-Phase 2 (implemented; bandwidth measurement pending, Section 6.7.2) added the
-score-gated escalation path: an asynchronous cloud forwarder in the gateway
-and a minimal cloud-tier receiver, with a gated-versus-all-to-cloud bandwidth
-A/B (Sathupadi et al.).
+Phase 2 (completed) added the score-gated escalation path: an asynchronous
+cloud forwarder in the gateway and a minimal cloud-tier receiver, with a
+gated-versus-all-to-cloud bandwidth A/B (Sathupadi et al.). The measured run
+(Section 6.7.2) showed a 53.1% payload reduction under an anomaly-heavy
+workload with no measurable edge-side latency cost; because gated volume
+tracks the flag rate, mostly-normal traffic would reduce further, and a
+periodic-sample channel to preserve cloud-side visibility of normal readings
+remains future work.
+
+Phase 3 (completed) added the heavier cloud-tier model: an LSTM autoencoder that
+re-examines escalated readings by reconstruction error and confirms or suppresses
+each one (Section 6.7.3). Offline, the cloud confirmation step raised two-stage
+precision from 0.66 to 0.91 by suppressing 643 of 796 edge false positives while
+dropping only 13 true anomalies; online it confirmed all escalated anomalies at
+~0.65 ms per window. The model ships as a numpy artifact so the cloud container
+needs no deep-learning runtime. It is trained and evaluated on simulator-derived
+data and treats the window as an unordered batch rather than a true time series,
+so a genuine sequential model on field telemetry remains future work.
 
 Remaining phases follow the hybrid edge–cloud direction motivated by the
 literature (Chapter 2.7):
 
-- **Phase 3 — Cloud-tier model.** A heavier model (e.g. LSTM) in the cloud for
-  failure prediction or load forecasting on escalated windows.
 - **Phase 4 — Storage optimization.** Selective retention, downsampling, and
   compression to convert the storage-cost observation into a measured
   reduction (Huang et al.).

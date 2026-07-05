@@ -54,8 +54,8 @@ The architecture follows five principles:
 4. Make validation, latency, throughput, and event counts observable.
 5. Add edge intelligence incrementally — rule-based detection first, then a
    lightweight ML detector at the edge (Phase 1), then score-gated escalation
-   to a cloud tier (Phase 2), with the cloud-side model staged as a later
-   phase.
+   to a cloud tier (Phase 2), then a cloud-side LSTM-autoencoder verifier on
+   the escalated stream (Phase 3).
 
 ## 3.2 Energy Monitoring Node Layer
 
@@ -311,9 +311,10 @@ are batched into compact JSON envelopes carrying the measurements plus score,
 threshold, and model version, and POSTed to a minimal cloud-tier receiver that
 counts what it receives. Forward failures are counted and dropped rather than
 retried, so edge detection never depends on cloud reachability. The remaining
-elements of the hybrid design — a heavier cloud-side model on the escalated
-stream and edge-side storage optimization (Huang et al. [17]) — are staged as
-later phases and are not claimed as results here.
+heavier cloud-side model on the escalated stream is added in Phase 3
+(Section 6.7.3): an LSTM autoencoder that confirms or suppresses escalated
+readings by reconstruction error. Edge-side storage optimization (Huang et
+al. [17]) remains staged as a later phase and is not claimed as a result here.
 
 ## 3.10 Chapter Summary
 

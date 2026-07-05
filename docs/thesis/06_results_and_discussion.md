@@ -337,15 +337,110 @@ count forwarded readings and payload bytes. The evaluation compares `gated`
 forwarding against the naive `all`-to-cloud baseline under the identical
 pipeline (Section 5.6), so the gate is the only variable.
 
-The path is implemented and verified end to end (a functional test confirmed
-that flagged readings arrive at the cloud tier with matching byte counts on
-the sending and receiving side, while normal readings are not forwarded), but
-the bandwidth A/B has not yet been run; its measured reduction will be
-reported here. The expected outcome follows from the gate by construction —
-gated volume tracks the model's flag rate (roughly 7% of readings in the
-detection A/B scenarios) rather than the full stream — but consistent with the
-measurement-only policy of this thesis, no reduction percentage is claimed
-until measured.
+Both arms ran the same three anomaly scenarios (`undervoltage_test`,
+`overload_test`, `power_spike_test`) at the same offered load, one run per
+arm. Raw counters are in `results/escalation_bandwidth/{gated,all}/`.
+
+| Metric | all | gated | Reduction |
+| --- | ---: | ---: | ---: |
+| Telemetry readings processed | 1,378 | 1,380 | – |
+| Readings forwarded to cloud | 1,378 | 623 | 54.8% |
+| Escalation batches | 398 | 316 | 20.6% |
+| Payload bytes sent | 452,381 | 211,955 | 53.1% |
+
+**Bandwidth.** Score-gated escalation reduced edge-to-cloud payload volume by
+53.1% (452,381 to 211,955 bytes) relative to forwarding every reading, at
+essentially identical offered load in both arms. Three internal-consistency
+checks support the number. First, in the gated arm the forwarded count equals
+the model's anomaly count exactly (`cloud.forwarded` = `ml.anomalies` = 623):
+nothing bypasses the gate and no flagged reading is dropped. Second, the
+cloud-tier receiver independently counted the same volumes it was sent
+(623 readings / 211,955 bytes gated; 1,378 readings / 452,381 bytes all), so
+the sender-side counters are corroborated at the receiving end. Third, the
+anomaly rate was stable across arms (623/1,380 = 45.1% gated,
+633/1,378 = 45.9% all), confirming the two runs saw comparable inputs.
+
+**Edge cost.** Gating added no measurable edge-side latency: telemetry
+processing averaged 7.09 ms (p95 8.52 ms) gated versus 7.08 ms (p95 8.54 ms)
+in the all arm, and ML inference and queue latencies matched to within
+run-to-run noise. The per-batch cloud-forward call itself averaged ~2.1–2.2 ms
+in both arms.
+
+**Workload dependence.** The 53.1% figure is specific to this deliberately
+anomaly-heavy workload, in which the model flagged ~45% of readings — far
+above the ~7% flag rate seen in the mixed detection A/B scenarios
+(Section 6.7.1). Because gated volume tracks the flag rate by construction,
+traffic dominated by normal readings would yield a proportionally larger
+reduction; under this stress mix the measured 53.1% is therefore best read as
+a conservative bound for this configuration, and no figure is claimed for
+workloads that were not measured. The gate also has an inherent cost worth
+stating: the cloud tier never observes non-anomalous readings, which limits
+cloud-side retraining, drift monitoring, and post-hoc analysis of readings
+the edge model missed. A periodic sample or summary channel alongside the
+gated stream is an obvious mitigation and is left as future work
+(Section 7.5). Finally, these are single runs per arm; the bandwidth counts
+are near-deterministic given the scenario scripts, but the latency comparison
+should be read as indicative rather than as a formally repeated measurement.
+
+### 6.7.3 Cloud-tier verification A/B (Phase 3)
+
+Phase 3 adds the heavier cloud-side model motivated by the hybrid direction: an
+LSTM autoencoder that re-examines the readings the edge escalated. It is trained
+offline (`scripts/train_cloud_lstm.py`) on normal telemetry windows drawn from
+the same simulator-mirroring generators as the edge Isolation Forest, so the two
+tiers see a consistent world. Each reading is embedded in an eight-reading
+window and scored by its reconstruction error; a reading whose error exceeds a
+threshold (the 0.95 quantile of normal-window errors) is *confirmed* anomalous,
+while a well-reconstructed reading is treated as a likely edge false positive.
+The trained weights are exported to a numpy artifact and the cloud tier runs the
+forward pass in numpy alone (no deep-learning runtime in the container); a
+parity check asserts the numpy kernel matches the training model to within
+1.7e-6 before export.
+
+**Offline detection quality.** On a labeled test set of 8,000 normal and 2,000
+anomalous readings, the two-stage detector (edge gate followed by cloud
+confirmation) is compared against the edge model alone:
+
+| Detector | Precision | Recall | F1 | False positives |
+| --- | ---: | ---: | ---: | ---: |
+| Edge only (Isolation Forest) | 0.663 | 0.783 | 0.718 | 796 |
+| Two-stage (edge → cloud LSTM-AE) | 0.910 | 0.776 | 0.838 | 153 |
+
+The cloud confirmation step raised precision from 0.66 to 0.91 by suppressing
+643 of the 796 edge false positives, at the cost of dropping only 13 of the
+1,565 true anomalies the edge caught (recall 0.783 to 0.776). Per-type recall is
+essentially unchanged (overvoltage, power-spike, and undervoltage recall
+identical to the edge; overload down marginally from 0.436 to 0.410), so the
+precision gain does not come from discarding a particular anomaly class. This is
+the central Phase 3 result: a heavier second-opinion model on the *already
+filtered* stream is a cheap way to trade a small amount of recall for a large
+precision gain, which directly reduces false alarms without re-processing the
+full telemetry volume.
+
+**Online cost and behaviour.** The verifier was then run live in gated mode over
+the three anomaly scenarios (`results/cloud_verification/`). The escalation chain
+stayed internally consistent — the gateway forwarded 99 readings
+(`ml.anomalies` = `cloud.forwarded` = 99) and the cloud received exactly 99. The
+verifier scored the ten complete eight-reading windows it accumulated and
+confirmed all 80 readings, with reconstruction errors of 1.33–661 against the
+1.10 threshold: because the online escalations occur during genuine anomaly
+windows, they are all true anomalies, so a ~100% confirmation rate is the
+expected and correct outcome, and demonstrates that the verifier loses no true
+anomalies online. The false-positive-suppression benefit is quantified offline
+(above) rather than online, because the live gated stream contains few edge
+false positives to suppress. Cloud inference cost was negligible — 0.65 ms per
+eight-reading window (~0.08 ms per reading) — so the second tier adds no
+meaningful latency to the escalation path.
+
+**Caveats.** The autoencoder is trained and evaluated on synthetic,
+simulator-derived data, so the precision figure characterises the model on this
+data distribution, not on field telemetry; the window is treated as an unordered
+batch rather than a true time series (the simulator emits conditionally
+independent per-tick readings), so the "LSTM" here exploits the joint feature
+distribution rather than temporal dynamics — a genuine sequential signal from
+real devices is future work. As with Phase 2 these are single runs, and the
+19 escalated readings that did not fill a window were not scored, which is the
+intended windowing behaviour rather than a loss.
 
 ## 6.8 Database Size Discussion
 
@@ -392,8 +487,10 @@ extension. Phase 1 answers this concretely: an edge Isolation Forest detector
 is implemented, trained offline, and evaluated (Section 6.7), scoring every
 reading into `model_predictions` and optionally raising `ML_ANOMALY` events
 through the same path as rules. The platform is therefore no longer only
-ML-ready in principle; it runs a working edge ML detector, with the cloud tier,
-score-gated escalation, and storage optimization staged as later phases.
+ML-ready in principle; it runs a working edge ML detector, and Phase 2 extends
+it with a measured score-gated escalation path to a cloud-tier receiver
+(Section 6.7.2). Cloud-side analytical models and storage optimization remain
+staged as later phases.
 
 ## 6.10 Limitations
 

@@ -289,12 +289,14 @@ detection never depends on cloud reachability, preserving the edge-first
 principle.
 
 **Cloud tier.** The receiver (`cloud-tier` in Docker Compose) is deliberately
-minimal in this phase: it validates the envelope, counts batches, readings,
-and received bytes, and keeps a bounded in-memory buffer of recent escalations
-for inspection. It persists nothing and hosts no model yet — the heavier
-cloud-side forecasting model is a later phase. Its role here is to terminate
-the escalation path so bandwidth can be measured end to end
-(`scripts/run_escalation_bandwidth_test.sh`, Section 5.6).
+minimal for the Phase 2 bandwidth measurement: it validates the envelope,
+counts batches, readings, and received bytes, and keeps a bounded in-memory
+buffer of recent escalations for inspection. Its role there is to terminate the
+escalation path so bandwidth can be measured end to end
+(`scripts/run_escalation_bandwidth_test.sh`, Section 5.6). Phase 3 extends the
+same service with an LSTM-autoencoder verifier (`cloud/app/verifier.py`) that
+scores escalated readings by reconstruction error using a numpy-only kernel, so
+the container still needs no deep-learning runtime (Section 6.7.3).
 
 ## 4.11 Metrics and Alert Workflow
 
