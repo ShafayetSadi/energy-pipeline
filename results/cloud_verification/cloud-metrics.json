@@ -1,0 +1,22 @@
+{
+    "uptime_seconds": 616.4498612839998,
+    "verifier": {
+        "available": true,
+        "version": "lstm_ae_v1"
+    },
+    "counters": {
+        "escalations.batches": 93,
+        "escalations.readings": 99,
+        "escalations.bytes_received": 35789,
+        "escalations.mode.gated": 99,
+        "escalations.device.house_0001": 47,
+        "verify.inference_ms": 6.547600999510905,
+        "verify.windows": 10,
+        "verify.scored": 80,
+        "verify.confirmed": 80,
+        "escalations.device.house_0004": 6,
+        "escalations.device.house_0003": 16,
+        "escalations.device.house_0002": 30,
+        "verify.avg_inference_ms": 0.6548
+    }
+}

@@ -1,0 +1,302 @@
+[
+    {
+        "device_id": "house_0001",
+        "recon_error": 3.351757249297636,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 3.7036687114446547,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 3.552316531908414,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 305.3290622673519,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 356.2762495584905,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 474.0909412440166,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 339.39950548167906,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 369.55964729153374,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 354.6603555958175,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 518.3504488145877,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 299.48635355636935,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 299.6548202036768,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 294.9639680538091,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 290.3621730781642,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 275.0020232034704,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 268.9070106798051,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 6.102366127426847,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 1.3270955266644529,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 4.394895936841686,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 2.8917078737507254,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 3.2290973855109364,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 3.203841102217554,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 2.0706637256480045,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 303.84715633044567,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 177.98399029601694,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 248.39284892514843,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 231.06344674417332,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 208.0989960956273,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 165.30177422722107,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 261.12246462047364,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 134.50738429288887,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 112.89403358980803,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 98.11482113640655,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0001",
+        "recon_error": 94.2418421800251,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 2.133791549406443,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 399.6469785608934,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 351.89707682416275,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 399.3793358719422,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 230.5480364825277,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 291.24139266275216,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 294.79484057892086,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0002",
+        "recon_error": 289.5706409406372,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 571.0096513979587,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 358.6288020576863,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 409.66954951107977,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 438.3097038033837,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 661.2690557646399,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 553.7031114505866,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 378.37797084352,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    },
+    {
+        "device_id": "house_0003",
+        "recon_error": 3.1749338825581788,
+        "threshold": 1.1039342809442625,
+        "confirmed": true
+    }
+]

@@ -1,0 +1,66 @@
+{
+    "uptime_seconds": 609.0770284810001,
+    "counters": {
+        "messages.received": 1424,
+        "validation.telemetry.success": 1375,
+        "messages.telemetry": 1375,
+        "readings.stored": 1375,
+        "ml.batches": 1231,
+        "ml.scored": 1375,
+        "events.critical": 237,
+        "events.type.overload": 227,
+        "validation.status.success": 49,
+        "messages.status": 49,
+        "events.warning": 406,
+        "events.type.power_spike": 352,
+        "events.type.under_voltage": 31,
+        "events.info": 31,
+        "events.type.voltage_anomaly": 31,
+        "cloud.escalation_candidates": 99,
+        "ml.anomalies": 99,
+        "events.type.ml_anomaly": 8,
+        "cloud.batches": 93,
+        "cloud.forwarded": 99,
+        "cloud.bytes_sent": 35789,
+        "events.type.device_failure": 10,
+        "devices.offline_detected": 10,
+        "events.type.over_voltage": 15
+    },
+    "latencies": {
+        "telemetry": {
+            "count": 1375.0,
+            "avg_ms": 6.721991212370168,
+            "p50_ms": 6.479358999968099,
+            "p95_ms": 8.35387000006449,
+            "p99_ms": 17.707631000121182
+        },
+        "ml_inference": {
+            "count": 1375.0,
+            "avg_ms": 10.229381621087338,
+            "p50_ms": 11.15151900012279,
+            "p95_ms": 12.561583000206156,
+            "p99_ms": 14.222240999970381
+        },
+        "ml_queue": {
+            "count": 1375.0,
+            "avg_ms": 48.28064666618163,
+            "p50_ms": 50.800524999885965,
+            "p95_ms": 51.652675999775965,
+            "p99_ms": 54.72116900000401
+        },
+        "status": {
+            "count": 49.0,
+            "avg_ms": 5.656156551010229,
+            "p50_ms": 5.173342000034609,
+            "p95_ms": 7.084192000093026,
+            "p99_ms": 9.15951299975859
+        },
+        "cloud_forward": {
+            "count": 93.0,
+            "avg_ms": 2.5358022795415076,
+            "p50_ms": 2.0977230001335556,
+            "p95_ms": 3.7110520001988334,
+            "p99_ms": 8.169000999714626
+        }
+    }
+}
