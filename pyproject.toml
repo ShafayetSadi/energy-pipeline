@@ -29,10 +29,23 @@ dev = [
     "ruff>=0.6.0",
     "ty>=0.0.55",
 ]
+# Training-only (Phase 3): the cloud tier runs numpy-only inference from an
+# exported .npz artifact, so torch never enters a container image.
+ml-train = [
+    "torch>=2.4.0",
+]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["gateway/tests"]
+testpaths = ["gateway/tests", "cloud/tests"]
 
 [tool.ruff]
 line-length = 100

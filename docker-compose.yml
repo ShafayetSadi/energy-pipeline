@@ -90,6 +90,8 @@ services:
     restart: unless-stopped
     ports:
       - "8002:8000"
+    volumes:
+      - ./models:/app/models:ro
 
   grafana:
     image: grafana/grafana:11.2.0

@@ -10,7 +10,8 @@ RUN pip install --no-cache-dir \
     "fastapi>=0.115.0" \
     "uvicorn[standard]>=0.34.0" \
     "pydantic>=2.8.0" \
-    "httpx>=0.28.0"
+    "httpx>=0.28.0" \
+    "numpy>=2.0.0"
 
 COPY app /app/cloud/app
 

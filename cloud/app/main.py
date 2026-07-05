@@ -1,14 +1,13 @@
-"""Cloud-tier receiver for edge->cloud escalations (Phase 2).
+"""Cloud-tier receiver + verifier for edge->cloud escalations (Phase 2/3).
 
-This service is intentionally minimal: it terminates the escalation path so
-the edge gateway's gated forwarding can be exercised and its bandwidth
-measured end to end. It counts every batch, reading, and payload byte it
-receives and exposes those counters at ``/api/v1/metrics/summary`` for the
-bandwidth A/B script. It keeps a bounded in-memory buffer of recent
-escalations for inspection but persists nothing.
-
-The heavier cloud-side model (LSTM forecasting / failure prediction) is a
-later phase and deliberately not part of this service yet.
+Phase 2 made this a minimal receiver that terminates the escalation path and
+counts batches, readings, and payload bytes for the bandwidth A/B. Phase 3
+adds a heavier cloud-side model: an LSTM autoencoder (``verifier.py``) that
+re-examines the escalated readings and confirms or suppresses each one by
+reconstruction error. Verdict counts and inference latency are exposed
+alongside the Phase 2 counters at ``/api/v1/metrics/summary``. The verifier
+disables itself cleanly if its artifact is absent, so the receiver behaves
+exactly as in Phase 2 when no cloud model is shipped.
 """
 from __future__ import annotations
 
@@ -19,14 +18,19 @@ from typing import Any
 from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 
-app = FastAPI(title="cloud-tier", version="0.1.0")
+from .verifier import CloudVerifier
+
+app = FastAPI(title="cloud-tier", version="0.2.0")
 
 RECENT_MAX = 500
+
+verifier = CloudVerifier()
 
 state: dict[str, Any] = {
     "started_at": time.monotonic(),
     "counters": Counter(),
     "recent": deque(maxlen=RECENT_MAX),
+    "verdicts": deque(maxlen=RECENT_MAX),
 }
 
 
@@ -65,9 +69,24 @@ async def receive_escalations(request: Request) -> dict[str, int]:
     counters["escalations.bytes_received"] += len(body)
     counters[f"escalations.mode.{envelope.mode}"] += len(envelope.readings)
     recent: deque = state["recent"]
+    verdict_buf: deque = state["verdicts"]
     for reading in envelope.readings:
         counters[f"escalations.device.{reading.device_id}"] += 1
-        recent.append(reading.model_dump())
+        payload = reading.model_dump()
+        recent.append(payload)
+        if verifier.available:
+            infer_start = time.perf_counter()
+            verdicts = verifier.add(payload)
+            if verdicts:
+                counters["verify.inference_ms"] += (time.perf_counter() - infer_start) * 1000.0
+                counters["verify.windows"] += 1
+                for v in verdicts:
+                    counters["verify.scored"] += 1
+                    if v["confirmed"]:
+                        counters["verify.confirmed"] += 1
+                    else:
+                        counters["verify.suppressed"] += 1
+                    verdict_buf.append(v)
     return {"accepted": len(envelope.readings)}
 
 
@@ -77,9 +96,22 @@ async def recent_escalations(limit: int = 50) -> list[dict[str, Any]]:
     return list(recent)[-limit:]
 
 
+@app.get("/api/v1/verdicts/recent")
+async def recent_verdicts(limit: int = 50) -> list[dict[str, Any]]:
+    verdicts: deque = state["verdicts"]
+    return list(verdicts)[-limit:]
+
+
 @app.get("/api/v1/metrics/summary")
 async def metrics_summary() -> dict[str, Any]:
+    counters = dict(state["counters"])
+    windows = counters.get("verify.windows", 0)
+    if windows:
+        counters["verify.avg_inference_ms"] = round(
+            counters["verify.inference_ms"] / windows, 4
+        )
     return {
         "uptime_seconds": time.monotonic() - state["started_at"],
-        "counters": dict(state["counters"]),
+        "verifier": {"available": verifier.available, "version": verifier.version},
+        "counters": counters,
     }
