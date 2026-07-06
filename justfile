@@ -47,3 +47,22 @@ export-proposed:
 	python3 scripts/export_results.py --base-url http://localhost:8001 --output-dir results/proposed
 
 eval: baseline proposed
+
+# Regenerate the thesis result figures (PDF + PNG) from pinned results/ JSONs.
+figures:
+	uv run --with matplotlib python scripts/make_thesis_figures.py
+
+# Build the thesis PDF from the chapter markdown with pandoc-crossref
+# (auto-numbers figures and resolves [@fig:...] cross-references). Depends on
+# the figures existing under results/figures/ — run `just figures` first.
+# Requires pandoc, pandoc-crossref, and a LaTeX engine (xelatex) on PATH.
+thesis-pdf: figures
+	pandoc docs/thesis/0[1-7]_*.md \
+		--from markdown --resource-path=.:docs/thesis \
+		--filter pandoc-crossref --citeproc \
+		--pdf-engine=xelatex --number-sections \
+		-V mainfont="TeX Gyre Termes" \
+		-V mathfont="TeX Gyre Termes Math" \
+		-M figureTitle=Figure -M figPrefix=fig. \
+		-o results/thesis.pdf
+	@echo "Wrote results/thesis.pdf"

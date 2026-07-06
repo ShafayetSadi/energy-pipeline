@@ -37,3 +37,10 @@ For each work session, record:
 - latency / throughput / storage tables
 - alert/event examples
 - limitations and failed experiments
+
+## Result figures
+
+Publication-ready result charts live in ``results/figures/`` as vector PDFs
+(for LaTeX ``\includegraphics``) plus PNG previews, regenerated from the pinned
+result JSONs by ``scripts/make_thesis_figures.py``. See ``results/README.md``
+for the figure-to-chapter mapping and LaTeX usage snippet.

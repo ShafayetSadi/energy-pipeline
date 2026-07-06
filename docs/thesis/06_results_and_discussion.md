@@ -16,7 +16,10 @@ rule evaluation, event generation, storage, and dashboard observability.
 
 The high-throughput experiment used 200 simulated devices publishing at a
 1-second interval for approximately 120 seconds per run. The experiment was
-repeated three times in each mode.
+repeated three times in each mode. At matched throughput, the proposed gateway
+adds only a small ingest-latency overhead over the baseline (see [@fig:overhead]).
+
+![Mean per-message ingest latency, baseline vs. proposed gateway, at matched throughput (≈202 msg/s). Dots are the three individual runs per mode; the proposed gateway adds only +0.32 ms on average.](results/figures/fig5_ingest_overhead.pdf){#fig:overhead width=60%}
 
 | Mode | Run 1 | Run 2 | Run 3 | Average |
 | --- | ---: | ---: | ---: | ---: |
@@ -243,7 +246,11 @@ configurations. It measures the *operational cost* of ML scoring, separate from
 the offline detection-quality result above. The three modes processed a
 comparable input volume (1,376–1,379 telemetry messages); small differences and
 the per-mode event counts reflect the random component of the scenarios and so
-should be read as indicative rather than exact like-for-like.
+should be read as indicative rather than exact like-for-like. Adding ML leaves
+the ingest hot path essentially unchanged while the scoring cost moves into the
+asynchronous queue, off the critical path (see [@fig:async-decoupling]).
+
+![Async scoring decouples ML cost from the ingest hot path. The telemetry hot-path latency stays ≈6.4–6.7 ms across rules/ml/hybrid, matching rules-only; the scoring cost appears in the asynchronous `ml_queue` delay (≈49 ms) instead. This demonstrates decoupling, not batching amortisation.](results/figures/fig4_async_decoupling.pdf){#fig:async-decoupling width=70%}
 
 **Processing latency.** This was the headline operational finding of the first
 run, in which scoring was performed *inline* (synchronously, one reading at a
@@ -339,7 +346,10 @@ pipeline (Section 5.6), so the gate is the only variable.
 
 Both arms ran the same three anomaly scenarios (`undervoltage_test`,
 `overload_test`, `power_spike_test`) at the same offered load, one run per
-arm. Raw counters are in `results/escalation_bandwidth/{gated,all}/`.
+arm. Raw counters are in `results/escalation_bandwidth/{gated,all}/`, and the
+reduction is summarised in [@fig:bandwidth].
+
+![Score-gated vs. all-to-cloud edge→cloud escalation under the same offered load. Gating cut payload volume by 53.1% (bytes) and forwarded readings by 54.8%; receiver-side counters corroborated both volumes.](results/figures/fig3_bandwidth.pdf){#fig:bandwidth width=100%}
 
 | Metric | all | gated | Reduction |
 | --- | ---: | ---: | ---: |
@@ -406,6 +416,8 @@ confirmation) is compared against the edge model alone:
 | Edge only (Isolation Forest) | 0.663 | 0.783 | 0.718 | 796 |
 | Two-stage (edge → cloud LSTM-AE) | 0.910 | 0.776 | 0.838 | 153 |
 
+![Offline two-stage detection quality on the held-out set (8,000 normal / 2,000 anomalies): the cloud LSTM-AE verifier raises precision from 0.66 to 0.91 at near-identical recall (0.78→0.78), lifting F1 from 0.72 to 0.84.](results/figures/fig1_two_stage_quality.pdf){#fig:two-stage width=75%}
+
 The cloud confirmation step raised precision from 0.66 to 0.91 by suppressing
 643 of the 796 edge false positives, at the cost of dropping only 13 of the
 1,565 true anomalies the edge caught (recall 0.783 to 0.776). Per-type recall is
@@ -415,7 +427,9 @@ precision gain does not come from discarding a particular anomaly class. This is
 the central Phase 3 result: a heavier second-opinion model on the *already
 filtered* stream is a cheap way to trade a small amount of recall for a large
 precision gain, which directly reduces false alarms without re-processing the
-full telemetry volume.
+full telemetry volume. [@fig:fp-suppression] shows this suppression breakdown.
+
+![False-positive suppression by the cloud verifier (offline). Of the 796 edge false positives, 643 are suppressed by the cloud stage (leaving 153), at the cost of dropping only 13 true anomalies.](results/figures/fig2_fp_suppression.pdf){#fig:fp-suppression width=75%}
 
 **Online cost and behaviour.** The verifier was then run live in gated mode over
 the three anomaly scenarios (`results/cloud_verification/`). The escalation chain
