@@ -105,7 +105,7 @@ The expected contributions are:
 4. Validation and data-quality evidence for malformed MQTT payloads.
 5. Grafana dashboards that expose readings, events, gateway metrics, and thesis evaluation results.
 6. An edge Isolation Forest anomaly detector (Phase 1) with an offline precision/recall evaluation and an honest rules-versus-ML comparison.
-7. A clearly defined phased path toward a hybrid edge–cloud design (cloud-tier model, score-gated escalation, storage optimization) without claiming those as completed results.
+7. A hybrid edge–cloud extension of the architecture: a score-gated edge-to-cloud escalation path (Phase 2) and a cloud-tier LSTM autoencoder verifier (Phase 3), each with a controlled measurement, plus a clearly defined path toward cloud-tier elastic scaling on Kubernetes (Phase 4) — the latter identified as future work rather than claimed as a completed result.
 
 ## 1.8 Thesis Organization
 
@@ -116,5 +116,5 @@ observability dashboards. Chapter 3 presents the proposed system architecture.
 Chapter 4 describes the implementation methodology, including the gateway,
 database, rules, and dashboards. Chapter 5 explains the experimental
 evaluation method. Chapter 6 presents and discusses the results. Chapter 7
-concludes the thesis and describes future work such as ML anomaly detection,
-storage optimization, and broader hardware validation.
+concludes the thesis and describes future work such as cloud-tier elastic
+scaling on Kubernetes, storage optimization, and broader hardware validation.

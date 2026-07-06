@@ -153,9 +153,16 @@ so a genuine sequential model on field telemetry remains future work.
 Remaining phases follow the hybrid edge–cloud direction motivated by the
 literature (Chapter 2.7):
 
-- **Phase 4 — Storage optimization.** Selective retention, downsampling, and
-  compression to convert the storage-cost observation into a measured
-  reduction (Huang et al.).
+- **Phase 4 — Cloud-tier elastic scaling (Kubernetes).** Deploy the cloud tier
+  on Kubernetes and add horizontal pod autoscaling to the stateless LSTM-AE
+  verifier, then measure how it scales under a variable escalation load
+  (pod count, verification latency, and throughput as the escalated stream
+  grows). The verifier is already a stateless HTTP service with `/health` and a
+  metrics summary endpoint, which makes it a natural autoscaling target. A
+  detailed implementation plan is in
+  `docs/thesis/notes/2026-07-05-phase4-kubernetes-plan.md`. Selective retention,
+  downsampling, and compression are no longer part of the phased roadmap and are
+  now staged as open future work (Section 7.6).
 - **Per-device models.** Train a model per device rather than one global model,
   which the literature shows can improve detection on heterogeneous loads
   (Mofidul et al.).
@@ -168,6 +175,10 @@ literature (Chapter 2.7):
 
 The current implementation stores raw readings and event evidence. This is
 useful for evaluation, but it is not optimized for long-term storage cost.
+Storage optimization was previously staged as Phase 4 of the roadmap; it has
+been moved here as open future work so that Phase 4 can instead deliver a
+measured cloud-tier elastic-scaling result (Section 7.4). Storage optimization
+remains a valid and independent extension, not a completed result.
 
 Future storage work may include:
 
