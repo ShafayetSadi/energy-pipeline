@@ -1,0 +1,29 @@
+:name: Energy node — Nucleo-F429ZI
+:description: Boots the CubeIDE-built firmware and bridges Ethernet to the host TAP.
+
+$elf?=@/data/Projects/energy-pipeline/firmware/node-f429zi/Debug/node-f429zi.elf
+
+using sysbus
+mach create "energy-node"
+# Set before loading the platform: the RTC model samples this at construction.
+# Emulated RTC then serves host wall-clock time; firmware seeds its epoch from it.
+machine RealTimeClockMode HostTimeUTC
+machine LoadPlatformDescription @platforms/boards/stm32f4_discovery-kit.repl
+
+# The F429ZI Nucleo is close enough to the F4 discovery platform for
+# ETH/USART3; if LwIP init faults, switch to a custom .repl (see README).
+
+emulation CreateSwitch "switch"
+emulation CreateTap "tap-stm32" "tap"
+connector Connect sysbus.ethernet switch
+connector Connect host.tap switch
+
+showAnalyzer sysbus.usart3
+
+macro reset
+"""
+    sysbus LoadELF $elf
+"""
+runMacro $reset
+
+echo "Firmware loaded. Type 'start' to run."

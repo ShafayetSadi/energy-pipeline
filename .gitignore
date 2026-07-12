@@ -35,3 +35,4 @@ models/*.joblib
 # OS
 .DS_Store
 Thumbs.db
+firmware/node-f429zi/Debug/
