@@ -36,3 +36,4 @@ models/*.joblib
 .DS_Store
 Thumbs.db
 firmware/node-f429zi/Debug/
+firmware/hardware/spice/adc_*.txt

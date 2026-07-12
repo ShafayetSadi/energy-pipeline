@@ -23,6 +23,8 @@ firmware/
     sensor_sim.[ch]    synthetic waveform sampling + RMS/power computation
     telemetry.[ch]     JSON payload builders (telemetry + status)
     mqtt_app.[ch]      LwIP MQTT client wrapper: connect, LWT, publish loop
+  hardware/            analog front-end: full device schematic + ngspice
+                       simulation of both sensor channels (see its README)
   renode/
     nucleo_f429zi.resc Renode script: load ELF, bridge Ethernet to host TAP
     setup-tap.sh       one-time host TAP interface setup (needs sudo)
@@ -70,8 +72,15 @@ SCT-013 CT, dividers) is **not** simulated. Instead `sensor_sim.c` generates
 per-sample 50 Hz voltage/current waveforms and the firmware runs the same
 sampling → RMS → power computation it would run on real ADC data. On hardware,
 only `sensor_read_sample()` changes (swap synthetic generator for ADC+DMA).
-State this explicitly in the thesis: firmware logic and network behavior are
-validated in emulation; analog metrology is future/hardware work.
+
+The analog front-end itself (ZMPT101B + SCT-013 circuits) is designed and
+validated separately at circuit level in `hardware/` (ngspice), and the
+simulated ADC waveforms are verified through the firmware's RMS/power math
+(`hardware/spice/verify_chain.py`, errors < 2.5 % with design-value
+calibration). State this explicitly in the thesis: firmware logic and network
+behavior are validated in emulation, the analog design at circuit level in
+SPICE; a physically integrated build and metrology calibration are future
+hardware work.
 
 ## Milestones
 

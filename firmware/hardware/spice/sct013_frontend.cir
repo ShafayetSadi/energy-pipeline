@@ -1,0 +1,51 @@
+* SCT-013-030 current-sensing front-end -> STM32 ADC (PA1)
+* --------------------------------------------------------
+* The SCT-013-030 is a split-core CT with an INTERNAL burden resistor:
+* it outputs 1 Vrms at 30 Arms of primary current. Here the load draws
+* 10 Arms (2.3 kW at 230 V), so the CT outputs ~0.31 Vrms.
+* Model: 2000:1 split-core CT (line conductor through the core) into the
+* part's internal burden. Datasheet transfer 1 V / 30 A with a 2000:1
+* winding implies an effective burden of 66.7R: 10 A / 2000 * 66.7R = 0.333 Vrms.
+*   - the CT secondary is galvanically isolated, so its cold end is tied
+*     straight to the 1.65 V mid-rail bias (shared with the V channel)
+*   - R5/C2 anti-aliasing RC identical to the voltage channel so both
+*     channels see the same phase shift (matters for real-power accuracy)
+*
+* Run:  ngspice -b sct013_frontend.cir
+* Outputs: RMS/min/max at the ADC node + adc_i.txt sample dump.
+
+* --- load current: 10 Arms, 50 Hz, lagging 18.2 deg (PF ~ 0.95) ---
+* 18.2 deg lag expressed as a 1.0111 ms start delay so the source begins
+* at its own zero crossing (a phase parameter would inject a DC step that
+* takes ~L/R = 64 s to decay out of the CT secondary).
+Iload   0     lp    SIN(0 14.142 50 1.0111m)
+
+* --- SCT-013 split-core CT: 2000:1 into internal burden ---
+* The load current flows straight through Lpri (the line conductor
+* passing through the split core).
+Lpri    lp    0     1m
+Lsec    s1    bias  4000                    ; N^2 * Lpri, N = 2000
+Ksct    Lpri  Lsec  0.9999
+Rburden s1    bias  66.7                    ; internal burden of the -030
+
+* --- 3.3 V rail and mid-rail bias ---
+Vdd     vdd   0     DC 3.3
+R3      vdd   bias  10k
+R4      bias  0     10k
+Cbias   bias  0     10u
+
+* --- anti-aliasing filter into the ADC pin ---
+R5      s1    adc_i 1k
+C2      adc_i 0     100n                    ; ADC pin PA1
+
+.tran 20u 300m 100m
+
+.control
+run
+meas tran irms_v RMS v(adc_i) from=200m to=300m
+meas tran imax_v MAX v(adc_i) from=200m to=300m
+meas tran imin_v MIN v(adc_i) from=200m to=300m
+meas tran ibias  AVG v(adc_i) from=200m to=300m
+wrdata adc_i.txt v(adc_i)
+.endc
+.end
