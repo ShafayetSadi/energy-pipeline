@@ -37,3 +37,7 @@ models/*.joblib
 Thumbs.db
 firmware/node-f429zi/Debug/
 firmware/hardware/spice/adc_*.txt
+firmware/hardware/kicad/render/
+firmware/hardware/kicad/*.net
+firmware/hardware/kicad/*.pdf
+firmware/hardware/kicad/*-backups/

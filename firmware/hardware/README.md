@@ -23,6 +23,12 @@ matters for real-power accuracy). Firmware samples at 5 kHz.
 
 ## Files
 
+- `kicad/` — proper KiCad 7 project of the same circuit
+  (`energy-node.kicad_sch`, generated reproducibly by `gen_schematic.py`).
+  Netlist-verified: every net matches `spice/*.cir` (PA0 ← R5/C2,
+  PA1 ← R6/C3, V_BIAS ties both sensor cold ends to the R3/R4/C1 bias).
+  Export PDF/SVG with `kicad-cli sch export pdf energy-node.kicad_sch`,
+  or open in KiCad (eeschema) to edit or continue to PCB layout.
 - `schematic.py` — draws `energy_node_schematic.{svg,png}` (schemdraw)
 - `spice/zmpt101b_frontend.cir` — voltage channel, ngspice
 - `spice/sct013_frontend.cir` — current channel, ngspice
