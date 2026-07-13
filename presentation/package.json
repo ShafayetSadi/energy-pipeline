@@ -1,0 +1,17 @@
+{
+  "name": "wattflow-thesis-presentation",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "slidev --open",
+    "build": "slidev build",
+    "export": "slidev export --output wattflow-thesis-presentation.pdf",
+    "export:pptx": "slidev export --format pptx --output wattflow-thesis-presentation.pptx"
+  },
+  "devDependencies": {
+    "@slidev/cli": "52.17.0",
+    "@slidev/theme-default": "latest",
+    "playwright-chromium": "latest"
+  }
+}
