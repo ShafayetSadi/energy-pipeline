@@ -1,102 +1,257 @@
 #!/usr/bin/env python3
-"""Full energy-node schematic: analog front-end -> Nucleo-F429ZI.
+"""Render the energy-node analog front-end as a thesis-ready schematic.
 
-Draws the complete device circuit (both sensor channels, mid-rail bias
-and MCU connections) as a publication-quality figure for the thesis.
-Component values match the SPICE simulation in spice/*.cir.
+The figure mirrors the KiCad schematic and the two SPICE models:
 
-Run:  <venv-with-schemdraw>/python schematic.py
-Writes energy_node_schematic.svg and .png next to this file.
+- voltage channel: J1/R1/T1/R2/R5/C2 -> PA0
+- current channel: SCT-013-030/J2/R7/R6/C3 -> PA1
+- shared midpoint: R3/R4/C1 -> V_BIAS
+- controller connection: PA0/PA1/3V3/GND -> Nucleo-F429ZI
+
+Run from any directory with:
+    uv run --with schemdraw python firmware/hardware/schematic.py
+
+Writes energy_node_schematic.svg and energy_node_schematic.png beside this file.
 """
+
+from pathlib import Path
+import shutil
+import subprocess
 
 import schemdraw
 import schemdraw.elements as elm
 
+
+OUTDIR = Path(__file__).resolve().parent
+
+SECTION = '#1f4e79'
+MUTED = '#475569'
+BORDER = '#94a3b8'
+PANEL = '#f8fafc'
+SAFETY = '#b91c1c'
+
 d = schemdraw.Drawing()
-d.config(unit=2.0, fontsize=10)
+d.config(unit=1.7, fontsize=10, lw=1.5)
 
-# ================= Nucleo-F429ZI (right side) =================
-mcu = elm.Ic(
-    pins=[
-        elm.IcPin(name='PA0 (ADC1_IN0)', side='left', slot='4/4', anchorname='PA0'),
-        elm.IcPin(name='PA1 (ADC1_IN1)', side='left', slot='3/4', anchorname='PA1'),
-        elm.IcPin(name='3V3', side='left', slot='2/4', anchorname='V33'),
-        elm.IcPin(name='GND', side='left', slot='1/4', anchorname='GNDP'),
-        elm.IcPin(name='RJ45  (ETH)', side='right', slot='2/3'),
-        elm.IcPin(name='USB  (ST-LINK / VCP)', side='right', slot='1/3'),
-    ],
-    edgepadW=1.2, edgepadH=1.0,
-).at((16, 4)).label('Nucleo-F429ZI  (STM32F429ZIT6)', loc='top', fontsize=11)
-d += mcu
-d += elm.Line().at(mcu.V33).left(1.0)
-d += elm.Vdd().label('3V3', loc='top')
-d += elm.Line().at(mcu.GNDP).left(1.8)
-d += elm.Line().down(0.8)
-d += elm.Ground()
 
-# ================= Voltage channel (top) =================
-d += (vsrc := elm.SourceSin().up().at((0, 8)).length(2).label('mains\n230 V\n50 Hz', loc='left'))
-d += elm.Line().right(0.8).at(vsrc.end)
-d += (r1 := elm.Resistor().right().label('R1\n100 kΩ 1 W', loc='bottom'))
-d += (xf := elm.Transformer(t1=5, t2=5).right().anchor('p1').label('T1  ZMPT101B\n2 mA : 2 mA', loc='top', ofst=0.4))
-d += elm.Line().at(xf.p2).left(0.8).tox(vsrc.start)
+def text(x, y, value, *, size=10, color='black'):
+    """Place left-aligned explanatory text at an absolute coordinate."""
+    d.add(
+        elm.Label()
+        .at((x, y))
+        .label(value, fontsize=size, color=color, halign='left', valign='center')
+    )
+
+
+def panel(x, y, width, height, title, subtitle):
+    """Draw a lightly bounded functional block with a plain-language heading."""
+    d.add(
+        elm.Rect((0, 0), (width, height), fill=PANEL, lw=1)
+        .at((x, y))
+        .color(BORDER)
+    )
+    text(x + 0.35, y + height - 0.38, title, size=13, color=SECTION)
+    text(x + 0.35, y + height - 0.78, subtitle, size=9, color=MUTED)
+
+
+# ================= functional blocks =================
+panel(
+    0,
+    6.85,
+    18,
+    4.35,
+    '1. Voltage sensing channel',
+    '230 V AC -> current limiting -> galvanic isolation and scaling -> low-pass filter -> PA0',
+)
+panel(
+    0,
+    2.25,
+    18,
+    4.15,
+    '2. Current sensing channel',
+    'Load conductor -> SCT-013-030 clamp and internal burden -> low-pass filter -> PA1',
+)
+panel(
+    0,
+    -2.6,
+    8.55,
+    4.4,
+    '3. Shared ADC bias',
+    '3.3 V divider creates the 1.65 V midpoint used by both channels',
+)
+panel(
+    8.95,
+    -2.6,
+    9.05,
+    4.4,
+    '4. Nucleo-F429ZI connections',
+    'Matching PA0/PA1 tags denote the same electrical nets',
+)
+
+
+# ================= voltage channel =================
+d += (
+    vsrc := elm.SourceSin()
+    .up()
+    .at((1.0, 7.75))
+    .length(1.75)
+)
+text(0.35, 9.82, 'J1: 230 V AC, 50 Hz', size=8)
+d += elm.Line().right(0.45).at(vsrc.end)
+d += elm.Resistor().right().length(1.7).label('R1\n100 kΩ, 1 W', loc='bottom', fontsize=7)
+d += elm.Line().right(0.35)
+d += (
+    xf := elm.Transformer(t1=5, t2=5, core=True)
+    .right()
+    .anchor('p1')
+)
+text(3.1, 10.02, 'T1  ZMPT101B\n2 mA : 2 mA isolated', size=8)
+d += elm.Line().at(xf.p2).left(0.45).tox(vsrc.start)
 d += elm.Line().toy(vsrc.start)
 
-# secondary: hot end -> anti-alias RC -> PA0 ; cold end -> bias rail
-d += elm.Line().at(xf.s1).right(0.6)
-d += (rb1_top := elm.Dot())
-d += (r5 := elm.Resistor().right().label('R5\n1 kΩ'))
-d += (c2_node := elm.Dot())
-d += (c2 := elm.Capacitor().down().length(1.6).label('C2\n100 nF', loc='bottom'))
+# T1 secondary: R2 is the burden; R5/C2 filter the PA0 signal.
+d += elm.Line().at(xf.s1).right(0.8)
+d += (v_burden_top := elm.Dot())
+d += elm.Resistor().right().length(1.65).label('R5  1 kΩ', loc='top', fontsize=9)
+d += elm.Line().right(0.35)
+d += (pa0_node := elm.Dot())
+d += (
+    c2 := elm.Capacitor()
+    .down()
+    .at(pa0_node.start)
+    .length(1.15)
+    .label('C2\n100 nF', loc='right', fontsize=9)
+)
 d += elm.Ground().at(c2.end)
-d += elm.Line().at(c2_node.start).right(0.5).toy(mcu.PA0).tox(mcu.PA0)
-d += elm.Line().to(mcu.PA0)
+d += elm.Line().at(pa0_node.start).right(0.45)
+d += elm.Tag(width=2.25).right().label('PA0  voltage ADC', fontsize=9, color=SECTION)
 
-d += (rb1 := elm.Resistor().down().at(rb1_top.start).length(2.2).label('R2 (burden)\n330 Ω  0.1 %', loc='bottom'))
-d += elm.Line().at(xf.s2).right(0.6).toy(rb1.end)
-d += (biasdot_v := elm.Dot().at(rb1.end))
+d += (
+    r2 := elm.Resistor()
+    .down()
+    .at(v_burden_top.start)
+    .length(1.65)
+    .label('R2 burden\n330 Ω, 0.1%', loc='left', fontsize=7)
+)
+d += elm.Line().at(xf.s2).right(0.8).toy(r2.end)
+d += elm.Line().at(r2.end).right(2.2)
+d += elm.Tag(width=1.45).right().label('V_BIAS', fontsize=9, color=SECTION)
 
-# ================= Current channel (middle) =================
-d += (ct := elm.Transformer(t1=2, t2=6).right().at((6.2, 1.5)).label('T2  SCT-013-030\n2000 : 1, split core', loc='top'))
-d += elm.Line().at(ct.p1).left(0.8).label('load line conductor\n(through core)', loc='left')
-d += elm.Line().at(ct.p2).left(0.8)
+text(12.1, 8.2, 'R5 + C2\nAnti-alias low-pass\nfc ≈ 1.6 kHz', size=8, color=MUTED)
+text(
+    12.1,
+    9.7,
+    'SAFETY: J1 is mains voltage.\nUse rated isolation, protection,\nclearances, and enclosure.',
+    size=8,
+    color=SAFETY,
+)
 
-d += elm.Line().at(ct.s1).right(0.6)
-d += (rbi_top := elm.Dot())
-d += (r6 := elm.Resistor().right().label('R6\n1 kΩ'))
-d += (c3_node := elm.Dot())
-d += (c3 := elm.Capacitor().down().length(1.6).label('C3\n100 nF', loc='bottom'))
+
+# ================= current channel =================
+d += (
+    ct := elm.Transformer(t1=2, t2=6, core=True)
+    .right()
+    .at((3.1, 3.35))
+)
+text(0.35, 4.7, 'J2 — two-pin SCT sensor jack', size=8)
+d += elm.Line().at(ct.p1).left(1.15).label('load conductor\nthrough clamp', loc='left', fontsize=9)
+d += elm.Line().at(ct.p2).left(1.15)
+
+d += elm.Line().at(ct.s1).right(0.8)
+d += (i_burden_top := elm.Dot())
+d += elm.Resistor().right().length(1.65).label('R6  1 kΩ', loc='top', fontsize=9)
+d += elm.Line().right(0.35)
+d += (pa1_node := elm.Dot())
+d += (
+    c3 := elm.Capacitor()
+    .down()
+    .at(pa1_node.start)
+    .length(1.15)
+    .label('C3\n100 nF', loc='right', fontsize=9)
+)
 d += elm.Ground().at(c3.end)
-d += elm.Line().at(c3_node.start).right(0.5).toy(mcu.PA1).tox(mcu.PA1)
-d += elm.Line().to(mcu.PA1)
+d += elm.Line().at(pa1_node.start).right(0.45)
+d += elm.Tag(width=2.25).right().label('PA1  current ADC', fontsize=9, color=SECTION)
 
-d += (rbi := elm.Resistor().down().at(rbi_top.start).length(2.2).label('R7 (burden)*\n66.7 Ω', loc='bottom'))
-d += elm.Line().at(ct.s2).right(0.6).toy(rbi.end)
-d += (biasdot_i := elm.Dot().at(rbi.end))
+d += (
+    r7 := elm.Resistor()
+    .down()
+    .at(i_burden_top.start)
+    .length(1.65)
+    .label('R7 internal\n66.7 Ω', loc='left', fontsize=7)
+)
+d += elm.Line().at(ct.s2).right(0.8).toy(r7.end)
+d += elm.Line().at(r7.end).right(2.2)
+d += elm.Tag(width=1.45).right().label('V_BIAS', fontsize=9, color=SECTION)
 
-# ================= Mid-rail bias (bottom left) =================
-d += (vdd := elm.Vdd().at((1.5, -3.2)).label('3V3'))
-d += (r3 := elm.Resistor().down().at(vdd.start).label('R3\n10 kΩ'))
-d += (bias := elm.Dot().label('V_BIAS = 1.65 V', loc='bottom', ofst=(0.9, -0.3)))
-d += (r4 := elm.Resistor().down().at(bias.start).label('R4\n10 kΩ', loc='bottom'))
-d += elm.Ground().at(r4.end)
-d += elm.Line().at(bias.start).left(1.8)
-d += (cb := elm.Capacitor().down().length(1.9).label('C1\n10 µF', loc='left', ofst=(0.1, -0.6)))
-d += elm.Ground().at(cb.end)
+text(11.7, 5.05, 'SCT-013-030 external clamp\n2000 : 1; 1 V output at 30 A', size=8, color=MUTED)
+text(11.7, 4.15, 'R7 is the internal 66.7 Ω burden.\nDo not add a second external burden.', size=8, color=MUTED)
+text(11.7, 3.15, 'R6 + C3 match the voltage-channel\nfilter to preserve phase alignment.', size=8, color=MUTED)
 
-# bias rail to both channel cold ends
-d += elm.Line().at(bias.start).tox(biasdot_v.start)
-d += (jv := elm.Dot())
-d += elm.Line().at(jv.start).toy(biasdot_v.start)
-d += elm.Line().at(jv.start).tox(biasdot_i.start)
-d += elm.Line().toy(biasdot_i.start)
 
-# ================= annotations =================
-d += elm.Label().at((11, -7.0)).label(
-    '* SCT-013-030 has its internal burden; R7 shown for the bare-CT variant.\n'
-    'Anti-aliasing: fc = 1/(2π·1k·100n) ≈ 1.6 kHz; firmware samples at 5 kHz.',
-    fontsize=9)
+# ================= midpoint bias =================
+d += (vdd := elm.Vdd().at((1.5, 0.5)).label('3V3', fontsize=9))
+d += elm.Resistor().down().at(vdd.start).length(0.9)
+d += (bias := elm.Dot())
+d += elm.Resistor().down().at(bias.start).length(0.9)
+d += elm.Ground()
+text(0.35, 0.05, 'R3  10 kΩ', size=7)
+text(0.35, -0.85, 'R4  10 kΩ', size=7)
 
-d.save('energy_node_schematic.svg')
-d.save('energy_node_schematic.png', dpi=150)
-print('wrote energy_node_schematic.{svg,png}')
+d += elm.Line().at(bias.start).right(1.1)
+d += (
+    c1 := elm.Capacitor(polar=True)
+    .down()
+    .length(0.95)
+    .label('C1\n10 µF', loc='right', fontsize=8)
+)
+d += elm.Ground().at(c1.end)
+d += elm.Line().at(bias.start).right(3.25)
+d += elm.Tag(width=1.75).right().label('V_BIAS  1.65 V', fontsize=9, color=SECTION)
+
+text(4.35, -1.8, 'V_BIAS shifts bipolar AC waveforms\ninto the STM32 ADC\'s 0-3.3 V range.', size=7, color=MUTED)
+
+
+# ================= Nucleo-F429ZI =================
+mcu = (
+    elm.Ic(
+        size=(4.8, 2.2),
+        pins=[
+            elm.IcPin(name='PA0 (ADC1_IN0)', side='left', slot='4/4', anchorname='PA0', lblsize=7),
+            elm.IcPin(name='PA1 (ADC1_IN1)', side='left', slot='3/4', anchorname='PA1', lblsize=7),
+            elm.IcPin(name='3V3', side='left', slot='2/4', anchorname='V33', lblsize=7),
+            elm.IcPin(name='GND', side='left', slot='1/4', anchorname='GNDP', lblsize=7),
+            elm.IcPin(name='RJ45 (Ethernet)', side='right', slot='2/3', lblsize=7),
+            elm.IcPin(name='USB (ST-LINK/VCP)', side='right', slot='1/3', lblsize=7),
+        ],
+        edgepadW=0.8,
+        edgepadH=0.6,
+    )
+    .at((11.75, -1.35))
+)
+d += mcu
+
+d += elm.Line().at(mcu.PA0).left(0.35)
+d += elm.Tag(width=1.1).left().label('PA0', fontsize=8, color=SECTION)
+d += elm.Line().at(mcu.PA1).left(0.35)
+d += elm.Tag(width=1.1).left().label('PA1', fontsize=8, color=SECTION)
+d += elm.Line().at(mcu.V33).left(0.35)
+d += elm.Tag(width=1.1).left().label('3V3', fontsize=8, color=SECTION)
+d += elm.Line().at(mcu.GNDP).left(0.55)
+d += elm.Ground()
+
+text(9.3, -2.25, 'Same-name tags are electrically connected; no long crossing wire is required.', size=8, color=MUTED)
+
+
+# ================= output =================
+svg_path = OUTDIR / 'energy_node_schematic.svg'
+png_path = OUTDIR / 'energy_node_schematic.png'
+d.save(str(svg_path))
+mutool = shutil.which('mutool')
+if mutool is None:
+    raise RuntimeError('mutool is required to rasterize the generated SVG as PNG')
+subprocess.run(
+    [mutool, 'draw', '-r', '180', '-o', str(png_path), str(svg_path)],
+    check=True,
+)
+print(f'wrote {svg_path.name} and {png_path.name}')

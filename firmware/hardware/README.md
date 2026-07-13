@@ -51,7 +51,8 @@ it is not a breadboard circuit.
   The A4 layout includes numbered explanations for thesis readers. Export
   PDF/SVG with `kicad-cli sch export pdf energy-node.kicad_sch`,
   or open in KiCad (eeschema) to edit or continue to PCB layout.
-- `schematic.py` — draws `energy_node_schematic.{svg,png}` (schemdraw)
+- `schematic.py` — draws the four-block publication figure
+  `energy_node_schematic.{svg,png}` using Schemdraw and MuPDF (`mutool`)
 - `spice/zmpt101b_frontend.cir` — voltage channel, ngspice
 - `spice/sct013_frontend.cir` — current channel, ngspice
 - `spice/verify_chain.py` — closes the loop: loads the SPICE ADC-node
@@ -62,7 +63,11 @@ it is not a breadboard circuit.
 ## Run it
 
 ```sh
-cd spice
+# From the repository root: regenerate the publication SVG and PNG
+uv run --with schemdraw python firmware/hardware/schematic.py
+
+# Run the circuit simulations and firmware-equivalent verifier
+cd firmware/hardware/spice
 ngspice -b zmpt101b_frontend.cir     # prints RMS/max/min/bias at PA0
 ngspice -b sct013_frontend.cir       # same for PA1
 python3 verify_chain.py              # pass/fail table + waveform figure
