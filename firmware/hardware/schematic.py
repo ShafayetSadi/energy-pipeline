@@ -6,7 +6,8 @@ The figure mirrors the KiCad schematic and the two SPICE models:
 - voltage channel: J1/R1/T1/R2/R5/C2 -> PA0
 - current channel: SCT-013-030/J2/R7/R6/C3 -> PA1
 - shared midpoint: R3/R4/C1 -> V_BIAS
-- controller connection: PA0/PA1/3V3/GND -> Nucleo-F429ZI
+- controller connection: PA0/PA1/3V3/GND -> Nucleo-F429ZI with
+  STM32F429ZIT6 MCU shown explicitly
 
 Run from any directory with:
     uv run --with schemdraw python firmware/hardware/schematic.py
@@ -84,8 +85,8 @@ panel(
     -2.6,
     9.05,
     4.4,
-    '4. Nucleo-F429ZI connections',
-    'Matching PA0/PA1 tags denote the same electrical nets',
+    '4. STM32 controller interface',
+    'Nucleo-F429ZI development board with STM32F429ZIT6 MCU',
 )
 
 
@@ -212,7 +213,7 @@ d += elm.Tag(width=1.75).right().label('V_BIAS  1.65 V', fontsize=9, color=SECTI
 text(4.35, -1.8, 'V_BIAS shifts bipolar AC waveforms\ninto the STM32 ADC\'s 0-3.3 V range.', size=7, color=MUTED)
 
 
-# ================= Nucleo-F429ZI =================
+# ================= Nucleo-F429ZI / STM32F429ZIT6 =================
 mcu = (
     elm.Ic(
         size=(4.8, 2.2),
@@ -221,8 +222,6 @@ mcu = (
             elm.IcPin(name='PA1 (ADC1_IN1)', side='left', slot='3/4', anchorname='PA1', lblsize=7),
             elm.IcPin(name='3V3', side='left', slot='2/4', anchorname='V33', lblsize=7),
             elm.IcPin(name='GND', side='left', slot='1/4', anchorname='GNDP', lblsize=7),
-            elm.IcPin(name='RJ45 (Ethernet)', side='right', slot='2/3', lblsize=7),
-            elm.IcPin(name='USB (ST-LINK/VCP)', side='right', slot='1/3', lblsize=7),
         ],
         edgepadW=0.8,
         edgepadH=0.6,
@@ -230,6 +229,17 @@ mcu = (
     .at((11.75, -1.35))
 )
 d += mcu
+
+# Show the controller explicitly while keeping the Nucleo board as the
+# implemented hardware boundary.  The full 144-pin Nucleo circuitry is an
+# off-the-shelf development board and would obscure the sensing front end.
+d.add(
+    elm.Rect((0, 0), (2.15, 0.95), fill='white', lw=1)
+    .at((13.62, -0.82))
+    .color(SECTION)
+)
+text(13.8, -0.36, 'U1  STM32F429ZIT6\nArm Cortex-M4 MCU', size=7, color=SECTION)
+text(12.15, 0.58, 'Nucleo-F429ZI development board', size=7, color=MUTED)
 
 d += elm.Line().at(mcu.PA0).left(0.35)
 d += elm.Tag(width=1.1).left().label('PA0', fontsize=8, color=SECTION)
@@ -240,7 +250,13 @@ d += elm.Tag(width=1.1).left().label('3V3', fontsize=8, color=SECTION)
 d += elm.Line().at(mcu.GNDP).left(0.55)
 d += elm.Ground()
 
-text(9.3, -2.25, 'Same-name tags are electrically connected; no long crossing wire is required.', size=8, color=MUTED)
+text(
+    9.3,
+    -2.25,
+    'Board-level abstraction: only thesis-relevant STM32 connections are shown.',
+    size=8,
+    color=MUTED,
+)
 
 
 # ================= output =================

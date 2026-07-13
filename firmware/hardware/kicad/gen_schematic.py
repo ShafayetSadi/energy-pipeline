@@ -4,6 +4,8 @@
 The schematic mirrors spice/*.cir and energy_node_schematic.svg:
 ZMPT101B voltage channel -> PA0, SCT-013-030 current channel -> PA1,
 shared 1.65 V mid-rail bias, headers to the Nucleo-F429ZI.
+The Nucleo block explicitly identifies its on-board STM32F429ZIT6 MCU while
+keeping the off-the-shelf board circuitry as a readable abstraction.
 
 Symbols are embedded verbatim from the system KiCad libraries, so the
 file opens standalone. Run:  python3 gen_schematic.py
@@ -67,6 +69,7 @@ symbols = []   # instance s-expressions
 wires = []
 labels = []
 notes = []
+graphics = []
 used_libs = {}
 
 
@@ -125,6 +128,15 @@ def note(p, text, size=1.6, bold=False):
     notes.append(
         f'  (text "{text}" (at {p[0]} {p[1]} 0)'
         f' (effects (font (size {size} {size}){weight}) (justify left bottom))'
+        f' (uuid {uuid.uuid4()}))'
+    )
+
+
+def rectangle(start, end, width=0.254):
+    """Add a non-electrical outline for a documented board or subassembly."""
+    graphics.append(
+        f'  (rectangle (start {start[0]} {start[1]}) (end {end[0]} {end[1]})'
+        f' (stroke (width {width}) (type default)) (fill (type none))'
         f' (uuid {uuid.uuid4()}))'
     )
 
@@ -242,16 +254,22 @@ label(p, 'V_BIAS')
 note((105, 163), 'V_BIAS = 1.65 V reference for both sensor channels', size=1.35, bold=True)
 
 # ============================================================
-# 4. Nucleo header + power flags
+# 4. Nucleo-F429ZI board and its STM32F429ZIT6 MCU
 # ============================================================
 note((195, 132), 'Power-flag symbols are KiCad checks for supplied 3V3/GND; they are not physical parts.', size=1.25)
-note((195, 137), '4. NUCLEO-F429ZI CONNECTIONS', size=2.54, bold=True)
-note((195, 141), 'PA0 = voltage samples; PA1 = current samples', size=1.5)
-note((195, 145), 'Matching net labels connect signals without long crossing wires.', size=1.25)
+note((195, 137), '4. STM32 CONTROLLER INTERFACE', size=2.54, bold=True)
+note((195, 141), 'NUCLEO-F429ZI development board with on-board STM32F429ZIT6 MCU', size=1.5, bold=True)
+note((195, 145), 'Board-level abstraction: PA0 = voltage ADC; PA1 = current ADC.', size=1.25)
 
-add('Connector_Generic:Conn_01x04', 'J3', 'TO NUCLEO-F429ZI CN9/CN8', 220, 157, rot=180,
-    ref_off=(-8.9, -8.9), val_off=(-25.4, -6.35))
-j3 = {n: pin_pos('Connector_Generic:Conn_01x04', n, 220, 157, 180) for n in '1234'}
+rectangle((192, 147), (270, 162), width=0.5)
+rectangle((196, 150), (216, 160), width=0.4)
+note((198, 153.5), 'U1  STM32F429ZIT6', size=1.5, bold=True)
+note((198, 157), 'Arm Cortex-M4 MCU', size=1.25)
+note((198, 159.5), 'on Nucleo-F429ZI board', size=1.1)
+
+add('Connector_Generic:Conn_01x04', 'J3', 'ADC/POWER HEADER', 235, 157, rot=180,
+    ref_off=(-8.9, -8.9), val_off=(-7.6, -6.35))
+j3 = {n: pin_pos('Connector_Generic:Conn_01x04', n, 235, 157, 180) for n in '1234'}
 p = hwire(j3['1'], 10.16); label(p, 'PA0')
 p = hwire(j3['2'], 10.16); label(p, 'PA1')
 p = hwire(j3['3'], 17.78)
@@ -277,6 +295,7 @@ out = f'''(kicad_sch (version 20230121) (generator gen_schematic.py)
   )
 {chr(10).join(wires)}
 {chr(10).join(labels)}
+{chr(10).join(graphics)}
 {chr(10).join(notes)}
 {chr(10).join(symbols)}
   (sheet_instances (path "/" (page "1")))

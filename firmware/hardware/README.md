@@ -32,10 +32,15 @@ Read the numbered blocks from top to bottom:
    R7 burden produces a voltage, and R6/C3 filter it before **PA1**.
 3. **ADC bias:** R3/R4 create **V_BIAS = 1.65 V** and C1 stabilizes it. The
    midpoint lets the STM32 ADC represent both halves of each AC waveform.
-4. **Nucleo connection:** matching `PA0`, `PA1`, `V_BIAS`, `3V3`, and `GND`
-   net labels are electrically connected even when KiCad does not draw a long
-   wire between the matching names. The small power-flag symbols by J3 only
-   tell KiCad that 3V3 and GND are supplied; they are not physical components.
+4. **STM32 controller interface:** the Nucleo-F429ZI development board and its
+   on-board **STM32F429ZIT6** MCU are shown explicitly. Matching `PA0`, `PA1`,
+   `3V3`, and `GND` net labels are electrically connected even when KiCad does
+   not draw a long wire between the matching names; `V_BIAS` is the separate
+   shared reference net for the two sensor channels. Only the
+   thesis-relevant board connections are expanded; the off-the-shelf Nucleo's
+   complete 144-pin support circuitry is intentionally abstracted. The small
+   power-flag symbols by J3 only tell KiCad that 3V3 and GND are supplied; they
+   are not physical components.
 
 The component prefix indicates its type: `J` = connector, `R` = resistor,
 `C` = capacitor, and `T` = transformer/sensor. J1 is a mains-voltage input and
