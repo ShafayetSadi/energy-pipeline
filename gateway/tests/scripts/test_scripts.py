@@ -7,8 +7,12 @@ from pathlib import Path
 
 def test_shell_scripts_parse() -> None:
     scripts = [
+        "scripts/lib/common.sh",
         "scripts/run_anomaly_detection_test.sh",
         "scripts/run_baseline_test.sh",
+        "scripts/run_cloud_verification_test.sh",
+        "scripts/run_detection_ab_test.sh",
+        "scripts/run_escalation_bandwidth_test.sh",
         "scripts/run_high_throughput_ab_test.sh",
         "scripts/run_proposed_test.sh",
     ]

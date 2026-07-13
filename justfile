@@ -3,7 +3,7 @@ set dotenv-load := true
 db_url := env("ALEMBIC_DATABASE_URL", "postgresql+asyncpg://energy:energy@127.0.0.1:54329/energy_monitoring")
 
 test:
-	uv run pytest gateway/tests -q
+	uv run pytest gateway/tests cloud/tests -q
 
 lint:
 	uv run ruff check .

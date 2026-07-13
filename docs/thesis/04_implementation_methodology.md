@@ -4,23 +4,24 @@
 
 This chapter describes how the proposed architecture was implemented. The
 implementation uses Docker Compose to run Mosquitto, TimescaleDB, the FastAPI
-edge gateway, Grafana, and the MQTT simulator. The gateway code is organized
-around schemas, MQTT handlers, ingestion services, repositories, rule
-evaluation, metrics collection, and background workers.
+edge gateway, Grafana, the MQTT simulator, and the optional cloud verifier. The
+gateway code is organized around schemas, MQTT handlers, ingestion services,
+repositories, rule evaluation, metrics collection, and background workers.
 
-The current implementation and evaluation focus on the software pipeline. The
-architecture supports STM32/ESP-based hardware nodes, but the repeatable
-evaluation in Chapter 5 uses a synthetic MQTT simulator to generate controlled
-high-throughput and anomaly scenarios.
+The repeatable evaluation in Chapter 5 uses a synthetic MQTT simulator to
+generate controlled high-throughput and anomaly scenarios. Separately, the
+compiled STM32F429ZI firmware has been exercised in Renode through the same
+MQTT/backend contract, while the analog sensing front end is validated in
+SPICE rather than as a physically integrated device.
 
 ## 4.2 Hardware and Device Setup
 
 The intended hardware node contains:
 
-- STM32 microcontroller
+- Nucleo-F429ZI / STM32F429 microcontroller
 - voltage sensing circuit
 - current sensing circuit
-- ESP8266 or ESP32 network module
+- Ethernet interface using the STM32 MAC and LwIP
 - power supply
 - optional temperature sensor
 
@@ -33,6 +34,8 @@ For controlled thesis evaluation, the simulator replaces physical devices. It
 generates multiple virtual devices, publishes telemetry and status messages,
 and can inject abnormal values or malformed payloads. This gives repeatable
 test data for throughput, latency, validation, and rule-detection experiments.
+The Renode workflow separately validates compiled firmware, Ethernet, MQTT
+LWT/reconnection, and payload compatibility; it does not emulate the ADC.
 
 ## 4.3 Firmware and Publisher Workflow
 
@@ -50,6 +53,7 @@ The gateway expects telemetry fields such as:
 
 ```json
 {
+  "schema_version": "1.0",
   "device_id": "house_0001",
   "timestamp": "2026-06-28T10:00:00+00:00",
   "voltage_v": 220.5,
@@ -62,10 +66,12 @@ The gateway expects telemetry fields such as:
 }
 ```
 
-The exact physical sampling method is outside the measured scope of this
-software-focused evaluation. The important implementation contract is that
-hardware or simulated publishers produce the same MQTT topic and payload
-format.
+In emulation, `sensor_sim.c` generates 50 Hz sample waveforms and the firmware
+runs the same RMS/power calculation intended for ADC samples. The separate
+ngspice verification passes simulated front-end waveforms through equivalent
+measurement math. Physical ADC/DMA integration and calibration remain outside
+the measured scope. Hardware and simulated publishers share the same MQTT
+topic and payload format.
 
 ## 4.4 MQTT Topic and Payload Design
 
@@ -370,6 +376,8 @@ Automated tests cover:
 - payload validation
 - rule engine behavior
 - ML anomaly detector behavior (disabled path, missing-artifact path, live scoring)
+- asynchronous ML queueing and edge-to-cloud forwarding behavior
+- cloud-tier ingestion and verification behavior
 - repository operations
 - metrics service behavior
 - alert service and outbox worker behavior
@@ -384,6 +392,9 @@ Scripted experiments cover:
 - repeated clean A/B comparisons
 - proposed-mode anomaly scenarios
 - invalid payload handling
+- rules-only, ML-only, and hybrid detection
+- gated versus all-to-cloud forwarding
+- cloud-model offline quality and live verification behavior
 - report and snapshot export
 
 The key scripts are:
@@ -396,6 +407,9 @@ The key scripts are:
 | `scripts/run_anomaly_detection_test.sh` | Proposed-mode anomaly and validation evidence |
 | `scripts/train_anomaly_model.py` | Train + offline-evaluate the Isolation Forest detector |
 | `scripts/run_detection_ab_test.sh` | Rules-only vs ml-only vs hybrid detection A/B |
+| `scripts/run_escalation_bandwidth_test.sh` | Score-gated vs all-to-cloud bandwidth A/B |
+| `scripts/train_cloud_lstm.py` | Train + offline-evaluate the cloud LSTM autoencoder |
+| `scripts/run_cloud_verification_test.sh` | Live Phase 3 cloud verification evidence |
 | `scripts/export_results.py` | Export metrics snapshots and Markdown reports |
 
 This strategy keeps the thesis evaluation reproducible. The automated tests
@@ -410,5 +424,6 @@ applies rule-based detection and an edge Isolation Forest anomaly detector,
 TimescaleDB stores readings, events, and model predictions, Grafana visualizes
 the system state, and scripts export reproducible evaluation evidence. The
 implementation now includes a trained, offline-evaluated edge ML detector
-(Phase 1), with explicit extension points for the cloud tier, score-gated
-escalation, and storage optimization in later phases.
+(Phase 1), score-gated edge-to-cloud escalation (Phase 2), and a cloud-side
+LSTM-autoencoder verifier (Phase 3). Storage optimization and Kubernetes
+elasticity remain later work.

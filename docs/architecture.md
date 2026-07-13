@@ -1,1833 +1,701 @@
-# Architecture: Edge-First Event-Driven Observability for Smart Energy Monitoring
-
-> Repository document: `architecture.md`  
-> Project type: ECE Thesis/Project implementation  
-> Current scope: IoT + edge gateway + rule-based event processing + time-series observability  
-> Future scope: AI/ML anomaly detection, load forecasting, and MLOps lifecycle
-
----
-
-## 1. Project Summary
-
-This project implements an edge-first, event-driven observability architecture for smart energy monitoring. STM32-based energy nodes measure electrical parameters such as voltage, current, and power, then publish telemetry through MQTT. A FastAPI-based edge gateway consumes the MQTT stream, validates payloads, detects rule-based events, classifies severity, stores time-series data in PostgreSQL/TimescaleDB, and exposes data to Grafana dashboards. Critical events trigger notifications.
-
-The thesis contribution is the **edge gateway layer**, not only the sensor node or dashboard. The gateway acts as a local intelligence layer between IoT devices and long-term storage/cloud systems. The core architectural claim is an **edge-first, event-driven observability architecture for smart energy monitoring, with rule-based detection, time-series storage, and future ML extension points**.
-
----
-
-## 2. Project Goals
-
-### 2.1 Primary Goals
-
-1. Build a working STM32/ESP-based energy monitoring node.
-2. Publish voltage, current, power, and device status data using MQTT.
-3. Use Mosquitto as the MQTT broker.
-4. Build a FastAPI edge gateway that consumes MQTT messages.
-5. Validate incoming telemetry data.
-6. Detect abnormal conditions using a configurable rule engine.
-7. Classify events as `NORMAL`, `WARNING`, or `CRITICAL`.
-8. Store time-series readings and events in PostgreSQL/TimescaleDB.
-9. Visualize measurements, device health, and events in Grafana.
-10. Compare a baseline raw-ingestion system against the proposed event-driven edge-processing system.
-
-### 2.2 Secondary Goals
-
-1. Add Docker Compose for reproducible local deployment.
-2. Add metrics collection for latency, throughput, validation failures, and event counts.
-3. Add alert notifications through Slack, email, or webhook.
-4. Prepare the schema for future AI/ML features.
-5. Keep the architecture modular so AI agents/developers can work on different parts independently.
-
-### 2.3 Non-Goals for Current Version
-
-The following are intentionally outside the first implementation scope:
-
-1. Full AI/ML anomaly detection.
-2. LLM-based reasoning or chatbot interface.
-3. National-scale smart-grid deployment.
-4. Cloud-native Kubernetes deployment.
-5. Commercial-grade billing/metering accuracy certification.
-6. Production-grade electrical safety certification.
-7. Complex user authentication/authorization.
-
-These can be added later after the core system is stable.
-
----
-
-## 3. High-Level Architecture
-
-```text
-┌─────────────────────────────┐
-│     STM32 Energy Node       │
-│  Voltage/Current Sensors    │
-│  Local Power Calculation    │
-└──────────────┬──────────────┘
-               │
-               │ MQTT telemetry/status/events
-               ▼
-┌─────────────────────────────┐
-│        MQTT Broker          │
-│        Mosquitto            │
-└──────────────┬──────────────┘
-               │
-               │ Subscribed by Edge Gateway
-               ▼
-┌─────────────────────────────────────────────┐
-│              Edge Gateway                   │
-│              FastAPI Backend                │
-├─────────────────────────────────────────────┤
-│ MQTT Consumer                               │
-│ Payload Validator                           │
-│ Rule Engine                                 │
-│ Storage Policy Service                      │
-│ Event Classifier                            │
-│ Aggregation/Downsampling                    │
-│ Metrics Collector                           │
-│ Alert Outbox + Delivery Worker              │
-│ REST API                                    │
-└──────────────┬──────────────────────────────┘
-               │
-      ┌────────┴─────────┐
-      ▼                  ▼
-┌──────────────┐   ┌────────  ──────────┐
-│ TimescaleDB  │   │ Notification       │
-│ PostgreSQL   │   │ Slack/Email/Webhook│
-└──────┬───────┘   └────────────  ──────┘
-       │
-       ▼
-┌─────────────────────────────┐
-│       Grafana Dashboard     │
-│ Real-Time Monitoring        │
-│ Event Timeline              │
-│ Device Health               │
-│ Evaluation Metrics          │
-└─────────────────────────────┘
-```
-
----
-
-## 4. Architectural Principles
-
-1. **Edge-first processing:** The gateway performs validation and event detection before data is stored or forwarded.
-2. **Event-driven design:** Critical events are detected and prioritized separately from normal telemetry.
-3. **Time-series-first storage:** Sensor readings are stored as timestamped measurements optimized for time-window queries.
-4. **Observability by design:** The system stores both energy data and operational metrics.
-5. **Future ML extension points:** Rule-based events and historical readings can later be used as training data or weak labels.
-6. **Modularity:** MQTT, gateway, database, dashboard, and notifications are separate services.
-7. **Reproducibility:** The full backend stack should run through Docker Compose.
-8. **Measurable thesis contribution:** Every major design decision should support measurable evaluation.
-
----
-
-## 5. System Components
-
-## 5.1 STM32 Energy Node
-
-### Responsibility
-
-The STM32 energy node is responsible for measuring electrical parameters and publishing telemetry to MQTT.
-
-### Hardware Components
-
-Minimum hardware:
-
-```text
-Voltage Sensor
-Current Sensor
-STM32 Microcontroller
-ESP8266 or ESP32 Wi-Fi Module
-Power Supply
-Optional Temperature Sensor
-```
-
-Recommended practical setup:
-
-```text
-STM32 + ESP32
-```
-
-ESP8266 is acceptable for a prototype, but ESP32 is preferable if TLS, larger payloads, or future device-side processing are needed.
-
-### Node Responsibilities
-
-1. Sample voltage from voltage sensor.
-2. Sample current from current sensor.
-3. Optionally sample temperature.
-4. Calculate instantaneous power.
-5. Generate timestamped telemetry payload.
-6. Publish telemetry to MQTT broker.
-7. Publish device status such as online/offline/heartbeat.
-8. Optionally receive configuration from MQTT command topics.
-
-### Sampling Strategy
-
-For thesis implementation, use a simple fixed interval.
-
-Recommended initial interval:
-
-```text
-1 message every 1–5 seconds per device
-```
-
-Avoid very high-frequency streaming in the first version unless required for evaluation.
-
-### Local Calculation
-
-Basic calculation:
-
-```text
-power_w = voltage_v × current_a
-```
-
-Optional future calculations:
-
-```text
-energy_wh = cumulative(power_w × time_hours)
-apparent_power_va = voltage_rms × current_rms
-power_factor = real_power_w / apparent_power_va
-```
-
-### Device ID Convention
-
-Use stable IDs:
-
-```text
-house_001
-house_002
-lab_node_001
-```
-
-Device IDs must be unique and should not contain spaces.
-
----
-
-## 5.2 MQTT Broker: Mosquitto
-
-### Responsibility
-
-The MQTT broker decouples sensor publishers from backend subscribers. Devices publish data to topics; the edge gateway subscribes to the required topic patterns.
-
-### Broker Service
-
-Recommended broker:
-
-```text
-Eclipse Mosquitto
-```
-
-### MQTT Topic Design
-
-Use separated topics for telemetry, status, events, and commands.
-
-```text
-energy/{device_id}/telemetry
-energy/{device_id}/status
-energy/{device_id}/events
-energy/{device_id}/commands
-energy/{device_id}/config
-```
-
-Examples:
-
-```text
-energy/house_001/telemetry
-energy/house_001/status
-energy/house_001/events
-energy/house_001/commands
-```
-
-### Gateway Subscriptions
-
-The edge gateway should subscribe to:
-
-```text
-energy/+/telemetry
-energy/+/status
-energy/+/events
-```
-
-Alternative broad subscription for early prototyping:
-
-```text
-energy/#
-```
-
-Use the more specific subscriptions once the topic structure is stable.
-
-### QoS Policy
-
-Recommended QoS:
-
-| Message Type              | Recommended QoS | Reason                                           |
-| ------------------------- | --------------: | ------------------------------------------------ |
-| Frequent normal telemetry |               0 | Lower overhead; acceptable for periodic readings |
-| Critical event            |               1 | At-least-once delivery is useful for alerts      |
-| Device status             |               1 | Useful for health monitoring                     |
-| Configuration command     |               1 | Should not be silently lost                      |
-
-### Retained Messages
-
-Use retained messages only for status/config topics, not high-frequency telemetry.
-
-Recommended retained topics:
-
-```text
-energy/{device_id}/status
-energy/{device_id}/config
-```
-
-Avoid retaining:
-
-```text
-energy/{device_id}/telemetry
-```
-
-### Last Will and Testament
-
-Each device should register a Last Will message so the broker can publish offline status if the device disconnects unexpectedly.
-
-Example Last Will topic:
-
-```text
-energy/house_001/status
-```
-
-Example Last Will payload:
-
-```json
-{
-  "device_id": "house_001",
-  "status": "offline",
-  "reason": "unexpected_disconnect",
-  "timestamp": "broker_time_or_device_time"
-}
-```
-
----
-
-## 5.3 Edge Gateway: FastAPI Backend
-
-### Responsibility
-
-The edge gateway is the central processing layer. It consumes MQTT messages, validates payloads, runs rules, stores data, exposes REST APIs, collects metrics, and triggers alerts.
-
-### Technology
-
-```text
-Python
-FastAPI
-Asyncio
-Pydantic
-SQLAlchemy or SQLModel
-asyncpg or psycopg
-paho-mqtt or gmqtt
-```
-
-### Internal Modules
-
-```text
-app/
-  main.py
-  config.py
-  mqtt/
-    client.py
-    handlers.py
-    topics.py
-  schemas/
-    telemetry.py
-    status.py
-    events.py
-  services/
-    validation_service.py
-    rule_engine.py
-    event_classifier.py
-    aggregation_service.py
-    alert_service.py
-    metrics_service.py
-  db/
-    session.py
-    models.py
-    repositories.py
-  api/
-    health.py
-    devices.py
-    readings.py
-    events.py
-    metrics.py
-  workers/
-    mqtt_consumer.py
-    device_heartbeat.py
-    aggregation_worker.py
-```
-
-### Runtime Responsibilities
-
-1. Connect to MQTT broker.
-2. Subscribe to telemetry/status topics.
-3. Parse JSON payloads.
-4. Validate schema and physical ranges.
-5. Store valid readings.
-6. Store rejected/invalid readings in a data-quality log.
-7. Apply rule engine to valid readings.
-8. Create events if rules are triggered.
-9. Classify event severity.
-10. Trigger alert workflow for critical events.
-11. Expose REST endpoints for devices/readings/events/metrics.
-12. Export operational metrics for evaluation.
-
----
-
-## 6. Data Flow
-
-## 6.1 Normal Telemetry Flow
-
-```text
-STM32 Node
-  ↓ publish telemetry
-Mosquitto Broker
-  ↓ gateway subscription
-FastAPI MQTT Consumer
-  ↓ parse JSON
-Payload Validator
-  ↓ valid payload
-Rule Engine
-  ↓ no critical condition
-TimescaleDB/PostgreSQL
-  ↓ query
-Grafana Dashboard
-```
-
-## 6.2 Critical Event Flow
-
-```text
-STM32 Node
-  ↓ publish telemetry
-Mosquitto Broker
-  ↓ gateway subscription
-FastAPI MQTT Consumer
-  ↓ parse JSON
-Payload Validator
-  ↓ valid payload
-Rule Engine
-  ↓ abnormal condition detected
-Event Classifier
-  ↓ WARNING or CRITICAL
-Events Table
-  ↓
-Alert Manager
-  ↓
-Slack/Email/Webhook
-  ↓
-Grafana Event Timeline
-```
-
-## 6.3 Invalid Payload Flow
-
-```text
-Incoming MQTT Message
-  ↓
-Payload Validator
-  ↓ invalid schema/range/timestamp
-Data Quality Log
-  ↓
-Metrics Counter Increment
-  ↓
-Optional warning event if repeated invalid payloads occur
-```
-
-## 6.4 Device Offline Flow
-
-```text
-Device fails unexpectedly
-  ↓
-MQTT Broker publishes Last Will message
-  ↓
-Gateway receives offline status
-  ↓
-Device status updated
-  ↓
-DEVICE_FAILURE event created
-  ↓
-Grafana + Notification
-```
-
----
-
-## 7. Data Contracts
-
-## 7.1 Telemetry Payload
-
-Topic:
-
-```text
-energy/{device_id}/telemetry
-```
-
-Payload:
-
-```json
-{
-  "schema_version": "1.0",
-  "device_id": "house_001",
-  "timestamp": "2026-06-15T12:00:00Z",
-  "voltage_v": 221.4,
-  "current_a": 2.3,
-  "power_w": 509.2,
-  "temperature_c": 33.5,
-  "sequence_no": 1024
-}
-```
-
-Required fields:
-
-```text
-schema_version
-device_id
-timestamp
-voltage_v
-current_a
-power_w
-```
-
-Optional fields:
-
-```text
-temperature_c
-sequence_no
-firmware_version
-rssi_dbm
-```
-
-## 7.2 Status Payload
-
-Topic:
-
-```text
-energy/{device_id}/status
-```
-
-Payload:
-
-```json
-{
-  "schema_version": "1.0",
-  "device_id": "house_001",
-  "status": "online",
-  "timestamp": "2026-06-15T12:00:00Z",
-  "firmware_version": "0.1.0",
-  "ip_address": "192.168.1.50",
-  "rssi_dbm": -62
-}
-```
-
-Allowed status values:
-
-```text
-online
-offline
-maintenance
-error
-```
-
-## 7.3 Event Payload from Device
-
-Device-originated events are optional. Most events should be generated by the edge gateway.
-
-Topic:
-
-```text
-energy/{device_id}/events
-```
-
-Payload:
-
-```json
-{
-  "schema_version": "1.0",
-  "device_id": "house_001",
-  "timestamp": "2026-06-15T12:00:05Z",
-  "event_type": "SENSOR_ERROR",
-  "severity": "WARNING",
-  "message": "Current sensor reading unavailable"
-}
-```
-
----
-
-## 8. Validation Rules
-
-## 8.1 Schema Validation
-
-Reject payload if:
-
-1. JSON is malformed.
-2. Required fields are missing.
-3. Field types are incorrect.
-4. `device_id` in topic does not match `device_id` in payload.
-5. Timestamp cannot be parsed.
-6. Schema version is unsupported.
-
-## 8.2 Physical Range Validation
-
-Initial suggested ranges:
-
-| Field           | Minimum |      Maximum | Action if outside range             |
-| --------------- | ------: | -----------: | ----------------------------------- |
-| `voltage_v`     |       0 |          300 | Reject or mark invalid              |
-| `current_a`     |       0 | configurable | Reject or create warning            |
-| `power_w`       |       0 | configurable | Reject or create warning            |
-| `temperature_c` |     -20 |          100 | Warning/invalid depending on sensor |
-
-For Bangladesh/South Asian household AC monitoring, voltage thresholds may be adapted based on the expected mains range and supervisor guidance.
-
-## 8.3 Timestamp Validation
-
-Rules:
-
-1. Timestamp must be ISO-8601 format.
-2. Timestamp should not be too far in the future.
-3. Timestamp should not be older than a configurable limit unless replay mode is enabled.
-
-Recommended defaults:
-
-```text
-MAX_FUTURE_SKEW_SECONDS=60
-MAX_PAST_SKEW_SECONDS=86400
-```
-
-## 8.4 Duplicate Detection
-
-Use `device_id + sequence_no` if available.
-
-If `sequence_no` is not available, use:
-
-```text
-device_id + timestamp
-```
-
-Duplicate policy:
-
-```text
-Do not insert duplicate readings.
-Increment duplicate counter.
-Log duplicate for evaluation.
-```
-
----
-
-## 9. Rule Engine
-
-## 9.1 Purpose
-
-The rule engine detects abnormal conditions before the data is stored or forwarded. This is the main edge-processing contribution.
-
-## 9.2 Rule Configuration
-
-Rules must be configurable, not hardcoded only in Python.
-
-Recommended configuration file:
-
-```text
-config/rules.yaml
-```
-
-Example:
-
-```yaml
-rules:
-  undervoltage:
-    enabled: true
-    event_type: UNDER_VOLTAGE
-    severity: WARNING
-    condition:
-      field: voltage_v
-      operator: lt
-      value: 200
-
-  overvoltage:
-    enabled: true
-    event_type: OVER_VOLTAGE
-    severity: WARNING
-    condition:
-      field: voltage_v
-      operator: gt
-      value: 250
-
-  overload:
-    enabled: true
-    event_type: OVERLOAD
-    severity: CRITICAL
-    condition:
-      field: current_a
-      operator: gt
-      value: 10
-
-  power_spike:
-    enabled: true
-    event_type: POWER_SPIKE
-    severity: WARNING
-    condition:
-      type: percentage_increase
-      field: power_w
-      percent: 30
-      window_seconds: 60
-
-  device_offline:
-    enabled: true
-    event_type: DEVICE_FAILURE
-    severity: CRITICAL
-    condition:
-      type: heartbeat_timeout
-      timeout_seconds: 30
-```
-
-## 9.3 Event Types
-
-Required event types:
-
-```text
-UNDER_VOLTAGE
-OVER_VOLTAGE
-OVERLOAD
-POWER_SPIKE
-DEVICE_FAILURE
-INVALID_PAYLOAD
-SENSOR_ERROR
-NORMAL_RECOVERY
-```
-
-Optional future event types:
-
-```text
-ANOMALY_DETECTED
-FORECASTED_OVERLOAD
-MODEL_DRIFT_DETECTED
-```
-
-## 9.4 Severity Levels
-
-```text
-NORMAL
-INFO
-WARNING
-CRITICAL
-```
-
-Severity definitions:
-
-| Severity | Meaning                                | Notification?              |
-| -------- | -------------------------------------- | -------------------------- |
-| NORMAL   | No abnormal condition                  | No                         |
-| INFO     | Useful operational event               | Optional                   |
-| WARNING  | Abnormal but not immediately dangerous | Optional or dashboard only |
-| CRITICAL | Requires immediate attention           | Yes                        |
-
-## 9.5 Rule Evaluation Order
-
-Recommended order:
-
-1. Data quality validation.
-2. Device health/status rules.
-3. Electrical safety rules.
-4. Trend/window rules.
-5. Recovery rules.
-
-## 9.6 Event Deduplication
-
-Avoid sending repeated alerts every second for the same condition.
-
-Deduplication key:
-
-```text
-device_id + event_type + severity
-```
-
-Cooldown:
-
-```text
-ALERT_COOLDOWN_SECONDS=300
-```
-
-If the same event persists, update event count instead of creating infinite alerts.
-
----
-
-## 10. Storage Design
-
-## 10.1 Database Choice
-
-Start with PostgreSQL. Use TimescaleDB when time-series performance and retention policies become important.
-
-## 10.2 Tables Overview
-
-```text
-devices
-energy_readings
-events
-data_quality_logs
-device_status_history
-system_metrics
-rule_definitions
-alert_deliveries
-alert_outbox
-model_predictions        # future extension
-```
-
-## 10.3 SQL Schema Draft
-
-```sql
-CREATE TABLE IF NOT EXISTS devices (
-    device_id TEXT PRIMARY KEY,
-    location TEXT,
-    device_type TEXT DEFAULT 'energy_node',
-    firmware_version TEXT,
-    status TEXT DEFAULT 'unknown',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS energy_readings (
-    time TIMESTAMPTZ NOT NULL,
-    device_id TEXT NOT NULL REFERENCES devices(device_id),
-    voltage_v DOUBLE PRECISION NOT NULL,
-    current_a DOUBLE PRECISION NOT NULL,
-    power_w DOUBLE PRECISION NOT NULL,
-    temperature_c DOUBLE PRECISION,
-    sequence_no BIGINT,
-    raw_payload JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (time, device_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_energy_readings_device_time
-ON energy_readings (device_id, time DESC);
-
-CREATE TABLE IF NOT EXISTS events (
-    event_id BIGSERIAL PRIMARY KEY,
-    time TIMESTAMPTZ NOT NULL,
-    device_id TEXT REFERENCES devices(device_id),
-    event_type TEXT NOT NULL,
-    severity TEXT NOT NULL,
-    rule_name TEXT,
-    message TEXT,
-    reading_time TIMESTAMPTZ,
-    event_value DOUBLE PRECISION,
-    threshold_value DOUBLE PRECISION,
-    metadata JSONB,
-    acknowledged BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_events_device_time
-ON events (device_id, time DESC);
-
-CREATE INDEX IF NOT EXISTS idx_events_type_severity
-ON events (event_type, severity, time DESC);
-
-CREATE TABLE IF NOT EXISTS data_quality_logs (
-    log_id BIGSERIAL PRIMARY KEY,
-    time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    topic TEXT,
-    device_id TEXT,
-    error_type TEXT NOT NULL,
-    error_message TEXT,
-    raw_payload TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS device_status_history (
-    id BIGSERIAL PRIMARY KEY,
-    time TIMESTAMPTZ NOT NULL,
-    device_id TEXT NOT NULL REFERENCES devices(device_id),
-    status TEXT NOT NULL,
-    firmware_version TEXT,
-    ip_address TEXT,
-    rssi_dbm DOUBLE PRECISION,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS system_metrics (
-    time TIMESTAMPTZ NOT NULL,
-    metric_name TEXT NOT NULL,
-    metric_value DOUBLE PRECISION NOT NULL,
-    labels JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS rule_definitions (
-    rule_name TEXT PRIMARY KEY,
-    enabled BOOLEAN DEFAULT TRUE,
-    event_type TEXT NOT NULL,
-    severity TEXT NOT NULL,
-    config JSONB NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS alert_deliveries (
-    alert_id BIGSERIAL PRIMARY KEY,
-    event_id BIGINT REFERENCES events(event_id),
-    channel TEXT NOT NULL,
-    status TEXT NOT NULL,
-    response TEXT,
-    sent_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS alert_outbox (
-    outbox_id BIGSERIAL PRIMARY KEY,
-    event_id BIGINT NOT NULL REFERENCES events(event_id),
-    channel TEXT NOT NULL,
-    payload JSONB NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    attempts INTEGER NOT NULL DEFAULT 0,
-    next_attempt_at TIMESTAMPTZ NOT NULL,
-    last_error TEXT,
-    locked_at TIMESTAMPTZ,
-    sent_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_alert_outbox_due
-ON alert_outbox (status, next_attempt_at);
-
-CREATE INDEX IF NOT EXISTS idx_alert_outbox_event
-ON alert_outbox (event_id);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_alert_outbox_event_channel
-ON alert_outbox (event_id, channel);
-
--- Future AI/ML extension table. It can remain unused in v1.
-CREATE TABLE IF NOT EXISTS model_predictions (
-    time TIMESTAMPTZ NOT NULL,
-    device_id TEXT NOT NULL REFERENCES devices(device_id),
-    model_version TEXT NOT NULL,
-    prediction_type TEXT NOT NULL,
-    anomaly_score DOUBLE PRECISION,
-    predicted_label TEXT,
-    input_window_start TIMESTAMPTZ,
-    input_window_end TIMESTAMPTZ,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (time, device_id, model_version, prediction_type)
-);
-```
-
-## 10.4 TimescaleDB Hypertables
-
-If TimescaleDB is enabled, convert time-series tables into hypertables.
-
-```sql
-CREATE EXTENSION IF NOT EXISTS timescaledb;
-
-SELECT create_hypertable('energy_readings', 'time', if_not_exists => TRUE);
-SELECT create_hypertable('events', 'time', if_not_exists => TRUE);
-SELECT create_hypertable('system_metrics', 'time', if_not_exists => TRUE);
-SELECT create_hypertable('device_status_history', 'time', if_not_exists => TRUE);
-```
-
-## 10.5 Retention Policy
-
-The gateway uses a configurable storage policy for valid telemetry. `baseline`
-mode always stores raw readings. `proposed` mode uses `STORAGE_POLICY`.
-
-| Policy | Raw normal readings | Raw event-triggering readings | Events | Quality logs |
-| --- | --- | --- | --- | --- |
-| `raw` | stored | stored | stored | stored |
-| `hybrid` | stored only when `STORE_RAW_READINGS=true` | stored | stored | stored |
-| `event_only` | skipped | stored | stored | stored |
-| `aggregate_only` | skipped | skipped | stored | stored |
-
-Invalid payloads always write `data_quality_logs`. Events remain the durable
-evidence source and are stored whenever generated.
-
-Thesis-safe default retention strategy:
-
-| Data                | Retention                       |
-| ------------------- | ------------------------------- |
-| Raw readings        | 30 days                         |
-| Aggregated readings | Several months                  |
-| Critical events     | Permanent for thesis evaluation |
-| Data quality logs   | 14 days                         |
-| System metrics      | 30 days                         |
-| Device status       | 30 days                         |
-| Alert deliveries    | 30 days                         |
-| Alert outbox rows   | 30 days after sent/discarded    |
-
-Retention is enforced by the background maintenance worker. A value of `0`
-disables pruning for that table. Events and model predictions are retained
-indefinitely by default.
-
-## 10.6 Aggregated Data
-
-Do not simply discard normal data. Instead:
-
-```text
-Raw data → short-term storage
-Normal data → aggregated long-term storage
-Critical events → permanent event log + notification
-```
-
-Potential continuous aggregates:
-
-```sql
--- Example only; adjust after TimescaleDB setup.
-CREATE MATERIALIZED VIEW IF NOT EXISTS energy_readings_1min
-WITH (timescaledb.continuous) AS
-SELECT
-    time_bucket('1 minute', time) AS bucket,
-    device_id,
-    AVG(voltage_v) AS avg_voltage_v,
-    AVG(current_a) AS avg_current_a,
-    AVG(power_w) AS avg_power_w,
-    MAX(power_w) AS max_power_w,
-    MIN(voltage_v) AS min_voltage_v,
-    COUNT(*) AS sample_count
-FROM energy_readings
-GROUP BY bucket, device_id;
-```
-
----
-
-## 11. REST API Design
-
-The REST API is for dashboard support, testing, data export, and AI agent integration.
-
-## 11.1 Health Endpoints
-
-```text
-GET /health
-GET /ready
-GET /version
-```
-
-Example `/health` response:
-
-```json
-{
-  "status": "ok",
-  "service": "edge-gateway",
-  "version": "0.1.0"
-}
-```
-
-## 11.2 Device Endpoints
-
-```text
-GET /api/v1/devices
-GET /api/v1/devices/{device_id}
-POST /api/v1/devices
-PATCH /api/v1/devices/{device_id}
-GET /api/v1/devices/{device_id}/status
-```
-
-## 11.3 Reading Endpoints
-
-```text
-GET /api/v1/readings
-GET /api/v1/readings/{device_id}
-GET /api/v1/readings/{device_id}/latest
-GET /api/v1/readings/{device_id}/aggregate
-```
-
-Query parameters:
-
-```text
-start_time
-end_time
-limit
-interval
-```
-
-Example:
-
-```text
-GET /api/v1/readings/house_001?start_time=2026-06-15T00:00:00Z&end_time=2026-06-15T23:59:59Z
-```
-
-## 11.4 Event Endpoints
-
-```text
-GET /api/v1/events
-GET /api/v1/events/{event_id}
-GET /api/v1/devices/{device_id}/events
-POST /api/v1/events/{event_id}/acknowledge
-```
-
-## 11.5 Metrics Endpoints
-
-```text
-GET /api/v1/metrics/summary
-GET /api/v1/metrics/latency
-GET /api/v1/metrics/throughput
-GET /api/v1/metrics/data-reduction
-```
-
-## 11.6 Rule Endpoints
-
-```text
-GET /api/v1/rules
-GET /api/v1/rules/{rule_name}
-PATCH /api/v1/rules/{rule_name}
-POST /api/v1/rules/reload
-```
-
-Rules may be file-based first. Database/API-based rule editing can be added later.
-
----
-
-## 12. Grafana Dashboard Specification
-
-## 12.1 Dashboard 1: Energy Overview
-
-Panels:
-
-1. Latest voltage per device.
-2. Latest current per device.
-3. Latest power per device.
-4. Total active devices.
-5. Total events in last 24 hours.
-6. Critical events in last 24 hours.
-
-## 12.2 Dashboard 2: Device Detail
-
-Variable:
-
-```text
-device_id
-```
-
-Panels:
-
-1. Voltage over time.
-2. Current over time.
-3. Power over time.
-4. Temperature over time, if available.
-5. Event annotations over power chart.
-6. Device status timeline.
-7. RSSI signal strength, if available.
-
-## 12.3 Dashboard 3: Event Timeline
-
-Panels:
-
-1. Events table.
-2. Event count by type.
-3. Event count by severity.
-4. Critical event timeline.
-5. Unacknowledged events.
-
-## 12.4 Dashboard 4: System Observability
-
-Panels:
-
-1. MQTT messages received per minute.
-2. Validation failures per minute.
-3. Database write latency.
-4. End-to-end processing latency.
-5. Gateway CPU/RAM, if exported.
-6. MQTT connection status.
-
-## 12.5 Dashboard 5: Thesis Evaluation
-
-Panels:
-
-1. Baseline latency.
-2. Proposed latency.
-3. Throughput comparison.
-4. Event counts by severity.
-5. Event counts by type.
-6. Validation failure counts.
-7. Alert latency distribution.
-
----
-
-## 13. Alerting Design
-
-Alert delivery is durable and asynchronous:
-
-```text
-MQTT -> validation -> rule engine -> storage policy -> database
-                                      -> alert_outbox -> delivery worker
-```
-
-Event producers enqueue alert work after event persistence. The delivery worker
-claims due rows with `FOR UPDATE SKIP LOCKED`, sends console/webhook/Slack
-notifications, records every attempt in `alert_deliveries`, and marks outbox
-rows `sent`, `failed`, or `discarded`.
-
-## 13.1 Alert Channels
-
-Initial recommended channels:
-
-```text
-Console log
-Webhook
-Slack webhook
-Email, optional future channel
-```
-
-## 13.2 Alert Trigger Policy
-
-Send alert when:
-
-```text
-severity == CRITICAL
-```
-
-Optional alert when:
-
-```text
-severity == WARNING and repeated more than N times in M minutes
-```
-
-## 13.3 Alert Payload
-
-```json
-{
-  "event_id": 123,
-  "device_id": "house_001",
-  "event_type": "OVERLOAD",
-  "severity": "CRITICAL",
-  "time": "2026-06-15T12:00:05Z",
-  "message": "Current exceeded configured threshold",
-  "value": 12.5,
-  "threshold": 10.0
-}
-```
-
-## 13.4 Alert Deduplication
-
-Use cooldown to avoid alert spam.
-
-```text
-ALERT_COOLDOWN_SECONDS=300
-```
-
-If the same event remains active:
-
-```text
-Update existing event count
-Do not send repeated notifications every sample
-```
-
-Retries use bounded backoff:
-
-```text
-attempt 1 -> retry after 30 seconds
-attempt 2 -> retry after 2 minutes
-attempt 3 -> retry after 10 minutes
-attempt 4 -> retry after 30 minutes
-attempt 5 -> discard
-```
-
----
-
-## 14. Baseline vs Proposed Evaluation
-
-## 14.1 Mode A: Baseline Raw Ingestion
-
-```text
-STM32 Node
-  ↓
-MQTT Broker
-  ↓
-Database
-  ↓
-Grafana
-```
-
-Characteristics:
-
-1. Every valid reading is stored directly.
-2. No rule engine before storage.
-3. Alerts may be generated only after database query/dashboard alerting.
-4. Less edge intelligence.
-5. Serves as the raw-ingestion performance baseline.
-
-## 14.2 Mode B: Proposed Edge Processing
-
-```text
-STM32 Node
-  ↓
-MQTT Broker
-  ↓
-Edge Gateway
-  ↓
-Validation + Rule Engine + Aggregation
-  ↓
-Database + Alerts + Grafana
-```
-
-Characteristics:
-
-1. Data is validated before storage.
-2. Critical events are detected immediately.
-3. Normal data can be downsampled/aggregated for long-term storage in future work.
-4. Invalid data is logged separately.
-5. Storage reduction is not claimed unless selective retention/downsampling is enabled and measured separately.
-6. Faster alert response.
-
-## 14.3 Metrics
-
-### End-to-End Latency
-
-```text
-latency_ms = dashboard_or_db_insert_time - device_timestamp
-```
-
-Alternative if device timestamp is unreliable:
-
-```text
-latency_ms = gateway_processed_time - gateway_received_time
-```
-
-### Event Detection Latency
-
-```text
-event_detection_latency_ms = event_created_time - telemetry_received_time
-```
-
-### Alert Latency
-
-```text
-alert_latency_ms = alert_sent_time - event_created_time
-```
-
-### Throughput
-
-```text
-throughput = total_messages_processed / total_test_duration_seconds
-```
-
-### Validation Failure Rate
-
-```text
-validation_failure_rate = invalid_payload_count / total_payload_count
-```
-
-### Data Reduction Ratio
-
-```text
-data_reduction_ratio = 1 - (proposed_storage_rows / baseline_storage_rows)
-```
-
-or by storage size:
-
-```text
-storage_reduction_ratio = 1 - (proposed_storage_size_mb / baseline_storage_size_mb)
-```
-
-### Event Detection Accuracy
-
-If synthetic ground-truth events are available:
-
-```text
-precision = true_positives / (true_positives + false_positives)
-recall = true_positives / (true_positives + false_negatives)
-f1_score = 2 * precision * recall / (precision + recall)
-```
-
-For rule-based implementation, ground truth can be generated using scripted test payloads.
-
----
-
-## 15. Test Data and Simulation
-
-## 15.1 Why Simulation Is Needed
-
-If hardware availability is limited, generate MQTT messages using a simulator. The simulator should behave like multiple devices.
-
-## 15.2 Simulator Responsibilities
-
-1. Publish normal telemetry.
-2. Publish undervoltage scenarios.
-3. Publish overload scenarios.
-4. Publish power spike scenarios.
-5. Publish malformed payloads.
-6. Simulate device offline by stopping heartbeat.
-7. Generate configurable message rates for throughput tests.
-
-## 15.3 Simulator Directory
-
-```text
-simulator/
-  mqtt_publisher.py
-  scenarios/
-    normal.yaml
-    undervoltage.yaml
-    overload.yaml
-    power_spike.yaml
-    invalid_payloads.yaml
-    high_throughput.yaml
-```
-
-## 15.4 Example Scenario
-
-```yaml
-scenario_name: overload_test
-num_devices: 3
-duration_seconds: 300
-publish_interval_seconds: 1
-anomalies:
-  - device_id: house_001
-    start_after_seconds: 60
-    duration_seconds: 30
-    type: overload
-    current_a: 12.5
-```
-
----
-
-## 16. Docker Compose Architecture
-
-## 16.1 Services
-
-Required services:
-
-```text
-mosquitto
-edge-gateway
-postgres or timescaledb
-grafana
-pgadmin, optional
-simulator, optional
-```
-
-## 16.2 Compose Service Relationships
-
-```text
-simulator → mosquitto → edge-gateway → timescaledb → grafana
-```
-
-## 16.3 Environment Variables
-
-```env
-APP_ENV=development
-LOG_LEVEL=INFO
-
-MQTT_HOST=mosquitto
-MQTT_PORT=1883
-MQTT_USERNAME=
-MQTT_PASSWORD=
-MQTT_CLIENT_ID=edge-gateway
-MQTT_TELEMETRY_TOPIC=energy/+/telemetry
-MQTT_STATUS_TOPIC=energy/+/status
-
-DATABASE_URL=postgresql+asyncpg://energy:energy@timescaledb:5432/energy_monitoring
-
-PROCESSING_MODE=proposed
-STORAGE_POLICY=raw
-STORE_RAW_READINGS=true
-
-ENABLE_ALERTS=true
-ALERT_WEBHOOK_URL=
-ALERT_SLACK_WEBHOOK_URL=
-ALERT_COOLDOWN_SECONDS=300
-ALERT_CRITICAL_ONLY=true
-ALERT_OUTBOX_ENABLED=true
-ALERT_OUTBOX_POLL_SECONDS=5
-ALERT_OUTBOX_BATCH_SIZE=50
-ALERT_OUTBOX_MAX_ATTEMPTS=5
-
-RETENTION_ENABLED=true
-RETENTION_RAW_READINGS_DAYS=30
-RETENTION_QUALITY_LOGS_DAYS=14
-RETENTION_SYSTEM_METRICS_DAYS=30
-RETENTION_STATUS_HISTORY_DAYS=30
-RETENTION_ALERT_DELIVERIES_DAYS=30
-RETENTION_ALERT_OUTBOX_DAYS=30
-
-RULES_FILE=/app/config/rules.yaml
-
-ENABLE_TIMESCALE=true
-ENABLE_SIMULATOR=false
-```
-
-## 16.4 Suggested Repository Structure
-
-```text
-energy-edge-monitoring/
-  architecture.md
-  README.md
-  docker-compose.yml
-  .env.example
-  docs/
-    thesis-notes.md
-    evaluation-plan.md
-    api-contract.md
-  firmware/
-    stm32-energy-node/
-      README.md
-      src/
-  gateway/
-    Dockerfile
-    pyproject.toml
-    app/
-      main.py
-      config.py
-      mqtt/
-      schemas/
-      services/
-      db/
-      api/
-      workers/
-    tests/
-    alembic/
-  config/
-    mosquitto.conf
-    rules.yaml
-    grafana/
-      dashboards/
-      provisioning/
-  database/
-    init.sql
-    migrations/
-  simulator/
-    mqtt_publisher.py
-    scenarios/
-  scripts/
-    run_baseline_test.sh
-    run_proposed_test.sh
-    export_results.py
-  results/
-    README.md
-```
-
----
-
-## 17. Security Design
-
-## 17.1 Current Prototype Security
-
-For local prototype:
-
-1. Run all services in a private Docker network.
-2. Use MQTT username/password if possible.
-3. Do not expose database ports publicly.
-4. Do not commit secrets to GitHub.
-5. Use `.env.example` and keep real `.env` ignored.
-
-## 17.2 Future Security Enhancements
-
-1. MQTT over TLS.
-2. Client certificates for devices.
-3. Per-device MQTT credentials.
-4. Topic-level authorization.
-5. FastAPI authentication.
-6. Grafana user roles.
-7. Secure alert webhooks.
-8. Audit logs.
-
-## 17.3 Practical TLS Note
-
-If ESP8266 is used, TLS may be difficult due to memory constraints. For thesis prototype, first build local-network MQTT without TLS. Then document TLS as an enhancement, or use ESP32 if TLS becomes required.
-
----
-
-## 18. Future AI/ML Extension
-
-AI/ML is not part of the first implementation, but the architecture should prepare for it.
-
-## 18.1 Future ML Features
-
-Potential features:
-
-1. Unsupervised anomaly detection.
-2. Load forecasting.
-3. Device behavior profiling.
-4. Dynamic threshold learning.
-5. Energy consumption pattern clustering.
-6. Model drift monitoring.
-7. Automated retraining pipeline.
-
-## 18.2 Future ML Pipeline
-
-```text
-TimescaleDB Historical Data
-  ↓
-Dataset Export
-  ↓
-Feature Engineering
-  ↓
-Model Training
-  ↓
-Model Evaluation
-  ↓
-Model Registry
-  ↓
-Edge Deployment
-  ↓
-Prediction Logging
-  ↓
-Drift Monitoring
-```
-
-## 18.3 Future Feature Examples
-
-```text
-rolling_avg_power_1min
-rolling_avg_power_5min
-max_current_5min
-voltage_stddev_5min
-power_spike_count_1h
-hour_of_day
-day_of_week
-```
-
-## 18.4 Model Prediction Contract
-
-Future prediction output:
-
-```json
-{
-  "device_id": "house_001",
-  "timestamp": "2026-06-15T12:00:00Z",
-  "model_version": "iforest_v1",
-  "prediction_type": "anomaly_detection",
-  "anomaly_score": 0.91,
-  "predicted_label": "ANOMALY"
-}
-```
-
-## 18.5 Why Current Design Supports AI Later
-
-The system stores:
-
-1. Raw and aggregated time-series data.
-2. Rule-triggered events.
-3. Device metadata.
-4. Data-quality logs.
-5. Operational metrics.
-6. Future model prediction table.
-
-This makes it possible to build ML datasets later without redesigning the whole project.
-
----
-
-## 19. AI Agent Build Instructions
-
-This section is written for AI coding agents or future contributors.
-
-## 19.1 Build Order
-
-Implement in this order:
-
-1. `docker-compose.yml` with Mosquitto, TimescaleDB/PostgreSQL, Grafana.
-2. Database schema and migrations.
-3. FastAPI health endpoint.
-4. MQTT connection from gateway to broker.
-5. Telemetry schema validation.
-6. Insert valid telemetry into database.
-7. MQTT simulator for test messages.
-8. Rule engine with basic threshold rules.
-9. Event table insertion.
-10. Alert manager with console/webhook output.
-11. Grafana dashboards.
-12. Evaluation scripts for baseline vs proposed modes.
-13. Documentation and thesis result export.
-
-## 19.2 Coding Rules for Agents
-
-1. Do not hardcode secrets.
-2. Do not hardcode rule thresholds in multiple places; use `rules.yaml` or database-backed rules.
-3. Validate every external MQTT payload with Pydantic or equivalent schema validation.
-4. Keep MQTT handlers thin; put logic in services.
-5. Store raw payload for debugging when possible.
-6. Log invalid payloads; do not silently discard them.
-7. Use structured logging.
-8. Write tests for validation and rule engine.
-9. Keep baseline mode and proposed mode switchable through configuration.
-10. Do not add AI/ML dependencies in v1 unless explicitly requested.
-
-## 19.3 Configuration Flags
-
-Use flags to control behavior:
-
-```env
-PROCESSING_MODE=proposed
-STORE_RAW_READINGS=true
-ENABLE_AGGREGATION=true
-ENABLE_ALERTS=true
-ENABLE_RULE_ENGINE=true
-ENABLE_ML=false
-```
-
-Allowed `PROCESSING_MODE` values:
-
-```text
-baseline
-proposed
-```
-
-## 19.4 Minimum Acceptance Criteria
-
-A build is acceptable when:
-
-1. Docker Compose starts core services.
-2. Simulator publishes MQTT telemetry.
-3. Gateway receives telemetry.
-4. Valid telemetry is stored in database.
-5. Invalid telemetry is logged.
-6. Rule engine creates at least four event types:
-   - `UNDER_VOLTAGE`
-   - `OVERLOAD`
-   - `POWER_SPIKE`
-   - `DEVICE_FAILURE`
-7. Grafana shows voltage/current/power charts.
-8. Grafana shows event timeline.
-9. Alert manager triggers for `CRITICAL` events.
-10. Evaluation script can compare baseline and proposed modes.
-
----
-
-## 20. Development Milestones
-
-## Milestone 1: Infrastructure
-
-Deliverables:
-
-1. Docker Compose stack.
-2. Mosquitto running.
-3. PostgreSQL/TimescaleDB running.
-4. Grafana running.
-5. FastAPI `/health` endpoint.
-
-## Milestone 2: Data Ingestion
-
-Deliverables:
-
-1. MQTT simulator.
-2. Gateway MQTT consumer.
-3. Telemetry validation.
-4. Database insertion.
-5. Basic reading API.
-
-## Milestone 3: Event Processing
-
-Deliverables:
-
-1. Rule engine.
-2. Event classifier.
-3. Event storage.
-4. Device offline detection.
-5. Alert manager.
-
-## Milestone 4: Dashboard
-
-Deliverables:
-
-1. Energy overview dashboard.
-2. Device detail dashboard.
-3. Event timeline dashboard.
-4. System metrics dashboard.
-
-## Milestone 5: Thesis Evaluation
-
-Deliverables:
-
-1. Baseline test mode.
-2. Proposed test mode.
-3. Synthetic scenarios.
-4. Latency measurement.
-5. Throughput measurement.
-6. Event detection and validation-quality measurement.
-7. Exported result tables and charts.
-
-## Milestone 6: Hardware Integration
-
-Deliverables:
-
-1. STM32 ADC sampling.
-2. ESP Wi-Fi MQTT publishing.
-3. Real telemetry visible in Grafana.
-4. At least one abnormal condition test.
-
----
-
-## 21. Thesis Chapter Mapping
-
-## Chapter 1: Introduction
-
-Discuss smart energy monitoring, IoT, edge processing, and the need for event-driven monitoring.
-
-## Chapter 2: Background and Literature Review
-
-Topics:
-
-1. Smart grid and smart metering.
-2. IoT communication protocols.
-3. MQTT publish/subscribe architecture.
-4. Edge computing.
-5. Time-series databases.
-6. Observability dashboards.
-7. Rule-based event detection.
-8. Future AI/ML anomaly detection.
-
-## Chapter 3: System Architecture
-
-Use this document as the base.
-
-## Chapter 4: Implementation
-
-Describe hardware, firmware, MQTT topics, gateway modules, database schema, dashboards, and Docker deployment.
-
-## Chapter 5: Evaluation
-
-Compare baseline and proposed modes for latency, throughput, validation behavior, and event detection.
-
-## Chapter 6: Results and Discussion
-
-Present latency, throughput, validation behavior, event detection, and dashboard screenshots.
-
-## Chapter 7: Conclusion and Future Work
-
-Discuss AI/ML extension, TLS security, more devices, cloud integration, and model-based anomaly detection.
-
----
-
-## 22. Recommended Names
-
-Project name options:
-
-```text
-EdgeGrid Monitor
-SmartEdge Energy Monitor
-EnergyEdge Observability
-Edge-Monitor for Smart Energy Systems
-```
-
-Recommended thesis title:
-
-```text
-Design and Implementation of an Event-Driven Edge Gateway for IoT-Based Smart Energy Monitoring
-```
-
-Alternative title emphasizing the architecture claim:
-
-```text
-An Edge-First, Event-Driven Observability Architecture for Smart Energy Monitoring
-```
-
----
-
-## 23. Reference Documentation for Developers
-
-These are useful implementation references for humans and AI coding agents:
-
-1. MQTT official site: https://mqtt.org/
-2. Eclipse Mosquitto: https://mosquitto.org/
-3. MQTT/Mosquitto concepts: https://mosquitto.org/man/mqtt-7.html
-4. FastAPI documentation: https://fastapi.tiangolo.com/
-5. TimescaleDB documentation: https://docs.timescale.com/
-6. TimescaleDB GitHub: https://github.com/timescale/timescaledb
-7. Grafana PostgreSQL data source: https://grafana.com/docs/grafana/latest/datasources/postgres/
-8. Docker Compose documentation: https://docs.docker.com/compose/
-9. PostgreSQL JSON/JSONB documentation: https://www.postgresql.org/docs/current/datatype-json.html
-
----
-
-## 24. Final Architecture Statement
-
-The system implements an STM32-based smart energy monitoring node that publishes measurements through MQTT. A Mosquitto broker routes telemetry to a FastAPI-based edge gateway. The gateway validates payloads, applies rule-based event detection, classifies abnormal conditions, stores time-series data and events in PostgreSQL/TimescaleDB, and triggers notifications for critical events. Grafana provides real-time observability and thesis evaluation dashboards. The system is evaluated by comparing a baseline raw-ingestion architecture against the proposed event-driven edge-processing architecture using latency, throughput, validation behavior, and event detection metrics. The final architecture claim is that this is an edge-first, event-driven observability architecture for smart energy monitoring, with rule-based detection, time-series storage, future storage optimization, and future ML extension points.
+# WattFlow Architecture
+
+> Edge-first, event-driven observability for smart energy monitoring
+>
+> Last reconciled with the repository: 2026-07-13 (`main` at `c58a1e6`)
+>
+> Contract reference: [HTTP API contract](api-contract.md)
+
+This document describes the system that exists in this repository now. It is
+an architecture reference, not an implementation wish list. Optional paths and
+unfinished work are labeled explicitly.
+
+## 1. Current architecture at a glance
+
+WattFlow accepts energy telemetry from either the STM32 firmware or a Python
+simulator, processes it at an edge gateway, stores operational evidence in
+TimescaleDB, and exposes it through REST and Grafana. The proposed mode adds
+rule-based detection, optional Isolation Forest scoring, durable alert
+delivery, and optional score-gated forwarding to a cloud LSTM-autoencoder
+verifier.
+
+The defensible architecture claim is:
+
+> WattFlow is an edge-first, event-driven observability architecture for smart
+> energy monitoring. Detection remains available at the edge; optional cloud
+> verification receives only selected, already-scored readings and is not on
+> the critical ingestion path.
+
+### 1.1 Implementation status
+
+| Area | Status | Current evidence and boundary |
+| --- | --- | --- |
+| MQTT-to-database pipeline | Implemented | Mosquitto, async FastAPI gateway, validation, repositories, and TimescaleDB migrations |
+| Deterministic detection | Implemented | Six YAML rules plus device-offline detection |
+| Storage policy and retention | Implemented | `raw`, `hybrid`, `event_only`, and `aggregate_only` decisions; scheduled pruning |
+| Alert delivery | Implemented | Durable outbox with console, generic webhook, and Slack channels |
+| Edge ML, Phase 1 | Implemented and evaluated; off by default | Isolation Forest artifact, inline or asynchronous micro-batch scoring, persisted predictions |
+| Edge-to-cloud gate, Phase 2 | Implemented and evaluated; off by default | `gated` and `all` forwarding modes with byte counters |
+| Cloud verifier, Phase 3 | Implemented and evaluated; optional | Windowed LSTM-autoencoder verifier with in-memory recent readings, verdicts, and counters |
+| STM32 firmware | Implemented and emulator-validated | Nucleo-F429ZI firmware publishes real MQTT through Renode and the live backend stack |
+| Analog sensing front end | Designed and simulated | KiCad schematic and ngspice validation exist; no physically integrated/calibrated meter is claimed |
+| Grafana | Implemented | Five provisioned dashboards |
+| Kubernetes autoscaling, Phase 4 | Planned only | Design note exists; no manifests or scaling result are in the current system |
+| Email alerts | Not implemented | An email provider/channel still needs to be added |
+| Production security and field deployment | Not implemented | No API auth, MQTT TLS, device certificates, or field metrology validation |
+
+### 1.2 System context
+
+```mermaid
+flowchart LR
+    subgraph Sources["Measurement sources"]
+        AFE["Analog front end<br/>KiCad + SPICE validated"]
+        FW["STM32F429ZI firmware<br/>Renode-validated Ethernet + MQTT"]
+        SIM["Python simulator<br/>scenario-driven MQTT publisher"]
+        AFE -. "future physical integration" .-> FW
+    end
+
+    subgraph Edge["Edge deployment"]
+        MQTT["Eclipse Mosquitto<br/>MQTT broker"]
+        GW["FastAPI edge gateway<br/>validate · detect · persist · expose"]
+        DB[("TimescaleDB / PostgreSQL")]
+        GRAF["Grafana<br/>five provisioned dashboards"]
+        CHANNELS["Alert destinations<br/>console · webhook · Slack"]
+    end
+
+    subgraph Cloud["Optional cloud extension"]
+        VERIFY["Cloud verifier API<br/>windowed LSTM autoencoder"]
+        CMEM["Bounded in-memory state<br/>recent readings · verdicts · counters"]
+        VERIFY --> CMEM
+    end
+
+    USERS["Operators / researchers"]
+
+    FW -->|"MQTT telemetry + status"| MQTT
+    SIM -->|"MQTT telemetry + status"| MQTT
+    MQTT -->|"subscribed topics"| GW
+    GW -->|"SQL transactions"| DB
+    DB -->|"provisioned SQL datasource"| GRAF
+    GW -->|"durable alert outbox"| CHANNELS
+    GW -. "HTTP batches: gated or all" .-> VERIFY
+    USERS -->|"REST / OpenAPI"| GW
+    USERS -->|"dashboards"| GRAF
+    USERS -. "cloud metrics and recent verdicts" .-> VERIFY
+```
+
+The cloud verifier does **not** currently write verdicts back to TimescaleDB.
+Its recent readings and verdicts are bounded process memory, so restarting the
+cloud service clears them. Edge rules, edge ML events, persistence, and alerts
+continue without the cloud tier.
+
+## 2. Runtime components and ownership
+
+| Component | Repository location | Owns |
+| --- | --- | --- |
+| STM32 application | `firmware/app/` and `firmware/node-f429zi/` | Sampling, RMS/power calculation, JSON payloads, MQTT connection/LWT/reconnect |
+| Python simulator | `simulator/` | Repeatable normal, anomaly, invalid-payload, and throughput scenarios |
+| MQTT broker | `config/mosquitto/` | Topic routing and publisher/subscriber decoupling |
+| Edge gateway | `gateway/app/` | Validation, detection, storage policy, persistence, workers, REST API, runtime metrics |
+| Schema migrations | `database/migrations/` | Relational schema, TimescaleDB hypertables, and continuous aggregate |
+| Rule configuration | `gateway/config/rules.yaml` | Thresholds, event types, severity, and enabled state loaded at runtime |
+| Edge model | `models/anomaly_iforest.joblib` | Isolation Forest, scaler, feature metadata, and anomaly threshold |
+| Cloud service | `cloud/app/` | Escalation receiver, per-device windows, LSTM-AE verification, cloud counters |
+| Cloud model | `models/cloud_lstm_ae.npz` | Numpy-loadable LSTM-autoencoder weights and threshold |
+| Dashboards | `config/grafana/` | Datasource provisioning and dashboard definitions |
+| Experiments | `scripts/` and `results/` | Reproducible runners, pinned result artifacts, figures, and reports |
+
+### 2.1 Edge gateway internals
+
+The FastAPI lifespan builds one application container and starts all enabled
+workers. Runtime schema creation is deliberately absent: Alembic owns the
+database schema before the gateway starts.
+
+```mermaid
+flowchart TB
+    MQTT["MQTT messages"] --> CONSUMER["MQTTConsumerWorker"]
+    CONSUMER --> ROUTER["Topic parser + message dispatcher"]
+
+    subgraph Gateway["FastAPI edge gateway process"]
+        ROUTER --> VALIDATE["ValidationService<br/>JSON · schema · topic/device · range · timestamp"]
+        VALIDATE -->|"invalid"| QUALITY["Data quality repository"]
+        VALIDATE -->|"valid telemetry"| RULES["RuleEngine"]
+        VALIDATE -->|"valid status/event"| INGEST["Status / device-event ingestion"]
+        RULES --> POLICY["StoragePolicyService"]
+        RULES --> EVENTREPO["Event repository"]
+        POLICY --> READREPO["Reading repository"]
+        RULES -. "optional" .-> MLQ["MLScoringWorker<br/>bounded async queue"]
+        MLQ --> IFOREST["Isolation Forest<br/>micro-batch scoring"]
+        IFOREST --> PREDREPO["Prediction repository"]
+        IFOREST -->|"optional ML_ANOMALY"| EVENTREPO
+        IFOREST -. "gated or all" .-> CLOUDQ["CloudForwarderWorker<br/>bounded async queue"]
+        EVENTREPO --> ALERT["AlertService"]
+        INGEST --> EVENTREPO
+        ALERT --> OUTBOX["Alert outbox repository"]
+
+        HEART["DeviceHeartbeatWorker"] --> EVENTREPO
+        MAINT["AggregationWorker<br/>refresh + retention"] --> SQL["SQLAlchemy async sessions"]
+        OUTBOX --> ALERTWORK["AlertOutboxWorker"]
+
+        QUALITY --> SQL
+        READREPO --> SQL
+        PREDREPO --> SQL
+        EVENTREPO --> SQL
+        OUTBOX --> SQL
+
+        API["REST routers<br/>health · devices · readings · events · metrics · rules"] --> SQL
+        API --> RULES
+        METRICS["MetricsService<br/>in-process counters + latency samples"] --> API
+    end
+
+    SQL --> DB[("TimescaleDB")]
+    CLOUDQ -. "HTTP POST batches" .-> CLOUD["Cloud tier"]
+    ALERTWORK --> DEST["console / webhook / Slack"]
+```
+
+### 2.2 Worker lifecycle
+
+The gateway starts these workers when their configuration allows it:
+
+1. metrics flushing;
+2. alert HTTP client and alert-outbox polling;
+3. cloud forwarding;
+4. asynchronous ML scoring;
+5. MQTT consumption;
+6. heartbeat/offline detection; and
+7. continuous-aggregate refresh and retention maintenance.
+
+Shutdown reverses the dependency-sensitive portion of that order and disposes
+the database engine. The ML and cloud workers attempt a best-effort queue drain
+on shutdown; their queues are not durable.
+
+## 3. Messaging and ingestion contracts
+
+### 3.1 MQTT topics
+
+| Topic | QoS default | Producer | Gateway behavior |
+| --- | ---: | --- | --- |
+| `energy/{device_id}/telemetry` | 0 | firmware or simulator | Validate, detect, apply storage policy, persist, optionally score |
+| `energy/{device_id}/status` | 1 | firmware or simulator | Update device state and status history; an offline status can create a critical event |
+| `energy/{device_id}/events` | 1 | External/future node publisher | Persist device-originated event; alert if critical |
+
+The configured subscriptions are the three `energy/+/...` patterns above. The
+current firmware and simulator publish telemetry and status, while the event
+topic is an implemented gateway input without a current first-party producer.
+The topic device ID must match the JSON `device_id`. Command and configuration
+topics are not implemented in the gateway.
+
+Every message carries `schema_version`, `device_id`, and `timestamp`.
+Telemetry adds `voltage_v`, `current_a`, `power_w`, and optional
+`temperature_c`, `sequence_no`, `firmware_version`, and `rssi_dbm`.
+
+See [docs/api-contract.md](api-contract.md) for example payloads and the full
+REST contract.
+
+### 3.2 Telemetry sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Firmware or simulator
+    participant M as Mosquitto
+    participant G as Edge gateway
+    participant D as TimescaleDB
+    participant Q as ML scoring worker
+    participant C as Cloud tier
+    participant A as Alert worker
+
+    P->>M: PUBLISH energy/{device}/telemetry
+    M-->>G: Deliver subscribed message
+    G->>G: Parse JSON and validate contract
+
+    alt Invalid message
+        G->>D: Insert data_quality_logs row
+    else Valid message
+        G->>G: Evaluate YAML rules in proposed mode
+        G->>G: Apply storage policy
+        opt Policy stores raw reading
+            G->>D: Upsert device and insert energy_readings
+        end
+        opt Rule hit
+            G->>D: Insert event
+            G->>D: Enqueue alert_outbox rows
+        end
+        opt Async edge ML enabled
+            G--)Q: Enqueue scoring job without waiting
+            Q->>Q: Score a micro-batch with Isolation Forest
+            Q->>D: Insert model_predictions
+            opt ML event emission enabled and score is anomalous
+                Q->>D: Insert ML_ANOMALY event
+                Q->>D: Enqueue alert_outbox rows if policy allows
+            end
+            opt Cloud forwarding is gated or all
+                Q--)C: Enqueue and POST escalation batch
+                C->>C: Buffer per-device window and verify when full
+            end
+        end
+        A->>D: Claim due outbox rows
+        A-->>A: Deliver and record attempt
+    end
+```
+
+Current ordering has one consequence worth preserving in reviews: with
+asynchronous ML enabled, the raw-reading storage decision happens before the
+ML result exists. Therefore `event_only` can skip a raw reading that is later
+classified as `ML_ANOMALY`; the prediction and event still persist.
+
+### 3.3 Validation and duplicate handling
+
+Validation is fail-closed for ingestion:
+
+- JSON must decode to an object;
+- schema version must be supported (`1.0` by default);
+- topic and payload device IDs must agree;
+- Pydantic schemas enforce field types and non-negative electrical values;
+- configurable physical ranges reject impossible readings; and
+- telemetry/status timestamps must fit configured past/future skew limits.
+
+Invalid payloads are recorded in `data_quality_logs` rather than readings.
+Reading duplicates are constrained by the `(time, device_id)` primary key and
+counted by gateway metrics when insertion is not performed.
+
+## 4. Detection architecture
+
+### 4.1 Deterministic rule engine
+
+Rules are loaded from `gateway/config/rules.yaml` and can be listed, toggled,
+or reloaded through REST. Toggling writes a `rule_definitions` audit/config
+row, but reloading the YAML file restores the file's definition; the YAML file
+remains the startup source of truth.
+
+| Rule | Condition | Event | Severity |
+| --- | --- | --- | --- |
+| `undervoltage` | `voltage_v < 200` | `UNDER_VOLTAGE` | `WARNING` |
+| `overvoltage` | `voltage_v > 250` | `OVER_VOLTAGE` | `WARNING` |
+| `overload` | `current_a > 10` | `OVERLOAD` | `CRITICAL` |
+| `power_spike` | power increases by at least 30% inside 60 seconds | `POWER_SPIKE` | `WARNING` |
+| `voltage_anomaly_low` | `voltage_v < 210` | `VOLTAGE_ANOMALY` | `INFO` |
+| `over_temperature` | `temperature_c > 60` | `OVER_TEMPERATURE` | `WARNING` |
+
+The separate heartbeat worker emits `DEVICE_FAILURE` when a non-maintenance
+device exceeds the configured silence timeout. Rule and alert cooldown state
+is in process memory and resets when the gateway restarts.
+
+### 4.2 Processing modes
+
+| Capability | `baseline` | `proposed` default | `proposed` with ML/cloud flags |
+| --- | --- | --- | --- |
+| Contract validation and quality logging | Yes | Yes | Yes |
+| Store every valid telemetry reading | Yes | Depends on storage policy | Depends on storage policy |
+| YAML rule evaluation | No | Yes | Configurable |
+| Derived rule events | No | Yes | Configurable |
+| Isolation Forest scoring | No | No | Optional |
+| `ML_ANOMALY` event emission | No | No | Optional and separately gated |
+| Edge-to-cloud forwarding | No | No | `off`, `gated`, or `all` |
+
+Device-originated messages still follow their own status/event handlers. The
+mode switch primarily controls telemetry-derived processing and is intended
+for controlled thesis comparisons rather than tenant-level runtime selection.
+
+### 4.3 Edge ML and cloud verification
+
+```mermaid
+flowchart LR
+    R["Validated telemetry"] --> F["Physics-informed feature vector<br/>V · I · P · T · abs(V-220) · P-(V×I)"]
+    F --> IF["Edge Isolation Forest"]
+    IF --> SCORE["Persist score and label<br/>model_predictions"]
+    IF --> DECISION{"Forward mode"}
+    DECISION -->|"off"| STOP["Keep processing at edge"]
+    DECISION -->|"gated: anomalous only"| BATCH["Cloud batch queue"]
+    DECISION -->|"all: comparison baseline"| BATCH
+    BATCH --> API["POST /api/v1/escalations"]
+    API --> WINDOW["Per-device window of 8 readings"]
+    WINDOW --> LSTM["Numpy LSTM-autoencoder inference"]
+    LSTM --> VERDICT{"Reconstruction error<br/>above threshold?"}
+    VERDICT -->|"yes"| CONFIRM["Confirmed anomaly counter + recent verdict"]
+    VERDICT -->|"no"| SUPPRESS["Suppressed edge candidate counter + recent verdict"]
+```
+
+The edge artifact is trained offline by `scripts/train_anomaly_model.py`; the
+cloud artifact is trained/exported by `scripts/train_cloud_lstm.py`. Both
+runtime detectors disable themselves cleanly if their model is absent. The
+cloud container performs numpy-only inference and does not include PyTorch.
+Cloud forwarding currently hangs off the asynchronous ML scoring worker, so it
+requires both `ENABLE_ML=true` and `ML_ASYNC_SCORING=true` in addition to a
+non-`off` forwarding mode.
+
+The cloud forwarder is intentionally loss-tolerant: queue overflow and failed
+HTTP batches are counted and dropped, not retried. This preserves edge
+availability but means the cloud stream is not an audit log.
+
+## 5. Persistence architecture
+
+Alembic migrations are the only schema authority. The initial migration owns
+the core tables, TimescaleDB hypertables, and `energy_readings_1min` continuous
+aggregate; the second migration owns the alert outbox.
+
+### 5.1 Data model
+
+```mermaid
+erDiagram
+    DEVICES ||--o{ ENERGY_READINGS : produces
+    DEVICES ||--o{ EVENTS : has
+    DEVICES ||--o{ DEVICE_STATUS_HISTORY : reports
+    DEVICES ||--o{ MODEL_PREDICTIONS : receives
+    EVENTS ||--o{ ALERT_OUTBOX : schedules
+    EVENTS ||--o{ ALERT_DELIVERIES : records
+
+    DEVICES {
+        text device_id PK
+        text status
+        timestamptz last_seen_at
+        text firmware_version
+    }
+    ENERGY_READINGS {
+        timestamptz time PK
+        text device_id PK, FK
+        float voltage_v
+        float current_a
+        float power_w
+        float temperature_c
+        bigint sequence_no
+        json raw_payload
+    }
+    EVENTS {
+        bigint event_id PK
+        timestamptz time
+        text device_id FK
+        text event_type
+        text severity
+        text rule_name
+        boolean acknowledged
+        json metadata
+    }
+    DEVICE_STATUS_HISTORY {
+        bigint id PK
+        timestamptz time
+        text device_id FK
+        text status
+        json metadata
+    }
+    MODEL_PREDICTIONS {
+        timestamptz time PK
+        text device_id PK, FK
+        text model_version PK
+        text prediction_type PK
+        float anomaly_score
+        text predicted_label
+        json metadata
+    }
+    ALERT_OUTBOX {
+        bigint outbox_id PK
+        bigint event_id FK
+        text channel
+        text status
+        int attempts
+        timestamptz next_attempt_at
+        json payload
+    }
+    ALERT_DELIVERIES {
+        bigint alert_id PK
+        bigint event_id FK
+        text channel
+        text status
+        timestamptz sent_at
+    }
+    DATA_QUALITY_LOGS {
+        bigint log_id PK
+        timestamptz time
+        text error_type
+        text device_id
+        text raw_payload
+    }
+    SYSTEM_METRICS {
+        timestamptz time PK
+        text metric_name PK
+        float metric_value
+        json labels
+    }
+    RULE_DEFINITIONS {
+        text rule_name PK
+        boolean enabled
+        text event_type
+        text severity
+        json config
+    }
+```
+
+`energy_readings`, `events`, `system_metrics`, and
+`device_status_history` are configured as hypertables when TimescaleDB is
+available. `energy_readings_1min` aggregates average voltage/current/power,
+maximum power, minimum voltage, and sample count by device and minute.
+
+### 5.2 Storage policies
+
+Baseline mode always stores valid raw readings. Proposed mode delegates to
+`STORAGE_POLICY`.
+
+| Policy | Normal raw reading | Rule-triggering raw reading | Event and quality evidence |
+| --- | --- | --- | --- |
+| `raw` | Store | Store | Store |
+| `hybrid` | Store only when `STORE_RAW_READINGS=true` | Store | Store |
+| `event_only` | Skip | Store | Store |
+| `aggregate_only` | Skip | Skip | Store |
+
+`raw` is the safe default. The current `aggregate_only` implementation means
+“do not persist raw readings”; it does not write a separate aggregate input.
+Because the continuous aggregate reads `energy_readings`, a true
+aggregate-only long-term path remains future work. Storage reduction must not
+be claimed unless a selective policy is enabled and measured separately.
+
+### 5.3 Retention
+
+The maintenance worker runs once per minute and applies these defaults:
+
+| Data | Default retention |
+| --- | ---: |
+| Raw readings | 30 days |
+| Data-quality logs | 14 days |
+| System metrics | 30 days |
+| Device status history | 30 days |
+| Alert delivery attempts | 30 days |
+| Sent/discarded alert-outbox rows | 30 days |
+| Events and model predictions | Indefinite; no pruning rule currently exists |
+
+Retention is application-driven `DELETE`, not a TimescaleDB retention policy.
+A value less than or equal to zero disables pruning for that table.
+
+## 6. Alerting architecture
+
+Alerts are derived from persisted events. By default only `CRITICAL` events
+are eligible, and each `(device, event type, severity)` is suppressed during
+the configured cooldown.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant E as Detection path
+    participant DB as TimescaleDB
+    participant W as AlertOutboxWorker
+    participant X as Console / webhook / Slack
+
+    E->>DB: Commit event
+    E->>DB: Insert one outbox row per configured channel
+    loop Every alert-outbox poll interval
+        W->>DB: Claim due pending/failed rows
+        DB-->>W: Locked batch
+        W->>X: Deliver alert
+        alt Delivery succeeds
+            W->>DB: Record alert_deliveries and mark sent
+        else Delivery fails
+            W->>DB: Record failure and schedule retry
+            Note over W,DB: Discard after configured maximum attempts
+        end
+    end
+```
+
+The unique `(event_id, channel)` index prevents duplicate outbox work. If the
+outbox is disabled, the service delivers inline and records the attempt. Email
+is not a configured channel in the current code.
+
+## 7. REST and observability surfaces
+
+### 7.1 Edge gateway API
+
+| Group | Endpoints |
+| --- | --- |
+| Service state | `GET /health`, `/ready`, `/version` |
+| Devices | list, detail, and status history under `/api/v1/devices` |
+| Readings | list, latest, and aggregate under `/api/v1/readings` |
+| Events | list, detail, and acknowledge under `/api/v1/events` |
+| Rules | list, detail, toggle, and reload under `/api/v1/rules` |
+| Metrics | summary, latency, throughput, data-reduction heuristic, event severity, and quality counts under `/api/v1/metrics` |
+
+The edge metrics service is in process. Counters and latency samples reset on
+gateway restart, although selected operational metrics are also flushed into
+`system_metrics`. The current `data-reduction` endpoint is a runtime heuristic,
+not sufficient evidence for a storage-reduction thesis claim.
+
+### 7.2 Cloud API
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /health` | Cloud service liveness |
+| `POST /api/v1/escalations` | Accept a validated batch from the edge |
+| `GET /api/v1/escalations/recent` | Return bounded recent escalated readings |
+| `GET /api/v1/verdicts/recent` | Return bounded recent verifier verdicts |
+| `GET /api/v1/metrics/summary` | Return bandwidth and verifier counters |
+
+### 7.3 Grafana
+
+Grafana reads TimescaleDB directly through a provisioned datasource. The five
+dashboards are `Energy Overview`, `Device Detail`, `Event Timeline`, `System
+Observability`, and `Thesis Evaluation`. Cloud verifier memory/counters are not
+currently provisioned into Grafana.
+
+## 8. Deployment topology
+
+Docker Compose is the implemented deployment target. The firmware emulator and
+hardware-design tools run outside Compose.
+
+```mermaid
+flowchart TB
+    subgraph Host["Developer / thesis host"]
+        REST["REST client<br/>localhost:8001"]
+        BROWSER["Browser<br/>localhost:3001"]
+        CLOUDCLIENT["Cloud API client<br/>localhost:8002"]
+        RENODE["Renode + STM32 ELF<br/>TAP 192.168.100.0/24"]
+
+        subgraph Compose["Docker Compose network"]
+            MOSQ["mosquitto<br/>1883 internal<br/>18831 host"]
+            EDGE["edge-gateway<br/>8000 internal<br/>8001 host"]
+            TS["timescaledb:5432<br/>54329 host"]
+            GRAF["grafana:3000<br/>3001 host"]
+            CLOUD["cloud-tier:8000<br/>8002 host"]
+            LOAD["simulator<br/>loadtest profile"]
+        end
+    end
+
+    RENODE -->|"MQTT through host port 18831"| MOSQ
+    LOAD -->|"MQTT"| MOSQ
+    MOSQ --> EDGE
+    EDGE --> TS
+    EDGE -. "optional HTTP escalation" .-> CLOUD
+    GRAF --> TS
+    REST --> EDGE
+    BROWSER --> GRAF
+    CLOUDCLIENT --> CLOUD
+
+    TS --- TSVOL[("timescale-data")]
+    MOSQ --- MQVOL[("mosquitto data + logs")]
+    GRAF --- GFVOL[("grafana-data")]
+```
+
+`just up` starts Mosquitto, TimescaleDB, Grafana, applies Alembic migrations,
+and then starts the edge gateway. It does not start the optional cloud tier.
+The cloud experiments start that service explicitly. The simulator is behind
+the `loadtest` Compose profile.
+
+Model and configuration mounts are read-only inside their containers. Database,
+broker, and Grafana data use named volumes; cloud recent state and both async
+worker queues are process memory.
+
+## 9. Firmware and physical-system boundary
+
+The current device story has three separately validated layers. They must not
+be collapsed into a claim of field-hardware validation.
+
+```mermaid
+flowchart LR
+    CIRCUIT["Analog front-end design<br/>ZMPT101B + SCT-013<br/>KiCad + ngspice"]
+    SAMPLES["ADC-sample boundary<br/>voltage/current waveforms"]
+    FW["Compiled STM32F429ZI firmware<br/>sampling · RMS · power · JSON · MQTT"]
+    RENODE["Renode execution<br/>Ethernet TAP + live MQTT session"]
+    PIPE["Unmodified backend pipeline<br/>Mosquitto → gateway → DB → Grafana"]
+
+    CIRCUIT -->|"SPICE waveform verification"| SAMPLES
+    SAMPLES -->|"synthetic waveform generator in emulation"| FW
+    FW --> RENODE
+    RENODE --> PIPE
+    CIRCUIT -. "real ADC + DMA integration remains" .-> FW
+```
+
+- The compiled firmware and network behavior are validated in Renode.
+- Renode stubs the ADC, so firmware measurement input is synthetic 50 Hz
+  waveform data passed through the real RMS/power calculation.
+- The isolated voltage/current front end is independently designed in KiCad
+  and simulated in ngspice, then checked through equivalent measurement math.
+- A physically integrated board, component-tolerance study, reference-meter
+  calibration, electrical-safety certification, and field trials remain open.
+
+The current firmware uses the Nucleo-F429ZI's Ethernet MAC and LwIP MQTT client;
+an ESP8266/ESP32 is no longer part of the implemented path.
+
+## 10. Failure isolation and delivery guarantees
+
+| Failure | Current behavior | Guarantee / limitation |
+| --- | --- | --- |
+| MQTT connection loss | Client reconnects with exponential backoff | QoS 0 telemetry can be lost; no device-side durable buffer |
+| Invalid input | Reject and write a quality log | Invalid readings do not reach detection/storage |
+| Duplicate reading | Composite key prevents a second row | Counted; no payload reconciliation |
+| Database transaction failure | Session rolls back | Message is not acknowledged through an application-level replay protocol |
+| Alert destination failure | Durable outbox retries, then discards | Attempts are auditable in the database |
+| ML queue overflow | Drop and increment `ml.dropped` | Rule/storage path remains available |
+| Cloud queue/HTTP failure | Drop and count | No retry or durable cloud-forward outbox |
+| Missing ML artifact | Detector disables itself | Rule-based gateway remains operational |
+| Cloud outage | Edge continues independently | Cloud verification is best-effort |
+| Gateway restart | Workers and in-memory counters/cooldowns reset | Database state and alert outbox survive |
+| Cloud restart | Recent escalations, windows, verdicts, counters reset | Cloud verifier state is not durable |
+
+## 11. Security posture
+
+The current repository is a controlled thesis/development deployment:
+
+- Mosquitto allows the configured local connection path; production device
+  identity and per-topic authorization are not established.
+- MQTT and local REST traffic are not protected by TLS in Compose.
+- Edge and cloud APIs have no authentication or authorization.
+- Compose defaults contain development database and Grafana credentials.
+- Webhook secrets are supplied by environment variables, not committed code.
+- The analog design is not a certified mains-connected product.
+
+Before an external or field deployment, add MQTT TLS and device credentials,
+API authentication/authorization, secret management, network isolation,
+non-default credentials, backup/restore procedures, and electrical-safety
+review.
+
+## 12. Evaluation architecture
+
+The experiment harnesses exercise distinct questions rather than one blended
+benchmark:
+
+| Evaluation lane | Implemented runner | Comparison |
+| --- | --- | --- |
+| Core edge overhead | `run_high_throughput_ab_test.sh` | baseline raw ingestion vs proposed rule processing |
+| Rule anomaly evidence | `run_anomaly_detection_test.sh` | proposed mode across labeled scenarios |
+| Detection design | `run_detection_ab_test.sh` | rules-only vs ML-only vs hybrid |
+| Edge-to-cloud bandwidth | `run_escalation_bandwidth_test.sh` | score-gated vs all-to-cloud |
+| Cloud verification | `run_cloud_verification_test.sh` | cloud confirmation/suppression of escalated readings |
+| Model quality | both training scripts with evaluation flags | offline edge and cloud model metrics |
+| Firmware path | `firmware/renode/run.sh` | compiled STM32 firmware through the unmodified MQTT/backend stack |
+| Analog path | `firmware/hardware/spice/verify_chain.py` | SPICE sensor outputs through measurement calculations |
+
+Pinned outputs live in `results/`; thesis interpretation lives in
+`docs/thesis/`. The architecture supports configurable selective storage, but
+current results must not be presented as proof of storage reduction,
+production readiness, certified metering accuracy, or large-scale field
+performance.
+
+## 13. Planned extensions, not current architecture
+
+The next architectural work is deliberately outside the implemented-state
+diagrams above:
+
+1. Phase 4 Kubernetes deployment and HPA experiment for the stateless cloud
+   API, as scoped in `docs/thesis/notes/2026-07-05-phase4-kubernetes-plan.md`.
+2. Physical sensor/STM32 integration, calibration, and field measurements.
+3. Durable cloud-forward retries and durable cloud verdict persistence if the
+   cloud path becomes operational rather than experimental.
+4. A real aggregate-only/downsampling storage path and a controlled storage
+   reduction experiment.
+5. MQTT/API security, secrets, backups, and deployment hardening.
+6. An email alert adapter and provider configuration if email is required.
+7. Per-device or adaptive models trained on real sequential field data.
+
+## 14. Architectural invariants
+
+Future changes should preserve these properties unless this document and the
+contract are intentionally revised together:
+
+1. MQTT topics and payload schema remain compatible across firmware,
+   simulator, and gateway.
+2. Alembic remains the only schema owner; application startup does not create
+   tables implicitly.
+3. Invalid telemetry never enters the readings or detection path.
+4. Edge detection and local storage do not depend on cloud availability.
+5. Optional ML failure does not disable deterministic rule processing.
+6. Alert intent is committed durably before external delivery when the outbox
+   is enabled.
+7. Experimental modes are controlled by configuration, not separate forks of
+   the ingestion code.
+8. Thesis claims distinguish implemented software, emulator validation,
+   circuit simulation, and future physical validation.

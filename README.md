@@ -5,11 +5,12 @@ directly from [`docs/architecture.md`](docs/architecture.md).
 
 ```mermaid
 flowchart LR
-    A["Energy node(s)\n(or simulator)"] -->|"MQTT\nenergy/+/telemetry"| B[Mosquitto\nbroker]
-    B -->|async pipeline| C["Edge Gateway\n(FastAPI)"]
-    C -->|"validate · rule engine\nstorage policy"| D[TimescaleDB]
-    C -->|"alert outbox"| F["Alert worker\nconsole/webhook/Slack"]
-    D --> E[Grafana]
+    A["STM32 firmware\nor simulator"] -->|"MQTT"| B["Mosquitto"]
+    B --> C["FastAPI edge gateway"]
+    C -->|"readings · events · predictions"| D[("TimescaleDB")]
+    C -->|"durable outbox"| F["console · webhook · Slack"]
+    C -. "optional score-gated batches" .-> G["Cloud LSTM-AE verifier"]
+    D --> E["Grafana"]
 ```
 
 ## Stack
@@ -20,25 +21,35 @@ flowchart LR
   policy, persists to TimescaleDB, and enqueues durable alert deliveries.
 - **Edge ML detector** — optional Isolation Forest anomaly detector (Phase 1),
   trained by `scripts/train_anomaly_model.py`, loaded from `/app/models`.
+- **Cloud tier** — optional escalation receiver and numpy-only LSTM-autoencoder
+  verifier (Phases 2–3). Edge forwarding can be disabled, score-gated, or run
+  in all-to-cloud comparison mode.
 - **MQTT broker** — Eclipse Mosquitto (`config/mosquitto/mosquitto.conf`).
 - **Storage** — TimescaleDB hypertables for `energy_readings`, `events`,
   `system_metrics`, `device_status_history`; continuous aggregate
   `energy_readings_1min` is managed by Alembic migrations under
   `database/migrations/`. `STORAGE_POLICY` controls proposed-mode raw reading
   storage, while thesis-safe retention defaults prune raw/operational tables.
-- **Dashboards** — Grafana with four provisioned dashboards
+- **Dashboards** — Grafana with five provisioned dashboards
   (`config/grafana/dashboards/`).
 - **Simulator** — `simulator/mqtt_publisher.py` with scenario YAML files
   (`simulator/scenarios/*.yaml`).
+- **Firmware and sensing design** — STM32F429ZI firmware validated end to end
+  in Renode, plus a separately validated KiCad/ngspice analog front end under
+  `firmware/`. Physical integration and calibration remain future work.
 
 ## Repository layout
 
 ```text
 .
-├── architecture.md          # authoritative spec (source of truth)
+├── README.md
 ├── docker-compose.yml
 ├── .env.example
 ├── pyproject.toml           # workspace deps + tool config
+├── docs/
+│   ├── architecture.md      # authoritative current-state architecture
+│   ├── api-contract.md      # implemented HTTP contract
+│   └── thesis/              # chapters, notes, and cited papers
 ├── gateway/                 # FastAPI edge gateway
 │   ├── Dockerfile
 │   ├── pyproject.toml
@@ -54,6 +65,7 @@ flowchart LR
 │   │   └── workers/         # MQTT consumer, heartbeat, maintenance, alert outbox
 │   ├── config/rules.yaml
 │   └── tests/               # pytest unit tests
+├── cloud/                   # escalation receiver + LSTM-AE verifier
 ├── config/
 │   ├── mosquitto/mosquitto.conf
 │   └── grafana/             # provisioning + dashboards
@@ -63,8 +75,10 @@ flowchart LR
 ├── simulator/
 │   ├── mqtt_publisher.py
 │   └── scenarios/*.yaml
-├── scripts/                 # baseline/proposed test runners + report exporter
-└── results/                 # curated reports + ignored raw snapshots
+├── firmware/                # STM32/Renode firmware + analog front-end design
+├── models/                  # reproducible edge/cloud model artifacts
+├── scripts/                 # experiment, training, export, and figure tooling
+└── results/                 # curated evidence + ignored raw run artifacts
 ```
 
 ## Quickstart
@@ -91,7 +105,7 @@ docker compose --profile loadtest run --rm simulator
 
 # or run a specific scenario from the host
 uv run python simulator/mqtt_publisher.py \
-  --host localhost --port 1883 \
+  --host localhost --port 18831 \
   --scenario-file simulator/scenarios/overload.yaml
 ```
 
@@ -100,6 +114,7 @@ Open:
 - Gateway health: <http://localhost:8001/health>
 - API docs (Swagger): <http://localhost:8001/docs>
 - Grafana: <http://localhost:3001> (admin / admin)
+- Optional cloud API: <http://localhost:8002/docs> after starting `cloud-tier`
 
 ## REST API summary
 
@@ -160,10 +175,11 @@ Supported operators: `lt`, `le`, `gt`, `ge`, `eq`, `ne`.
 
 Set `PROCESSING_MODE=baseline` or `PROCESSING_MODE=proposed` in `.env`.
 
-- **baseline** — every valid reading is stored; no rule engine runs (this
-  matches `Section 14.1` of the architecture doc).
+- **baseline** — every valid reading is stored; the telemetry rule/ML path is
+  disabled for the clean ingestion comparison.
 - **proposed** — validate, run the rule engine, apply `STORAGE_POLICY`, store
-  events, and enqueue async alerts (matches `Section 14.2`).
+  events, and enqueue async alerts. ML and cloud forwarding remain separately
+  controlled and are off by default.
 
 Storage policy defaults to `raw` to avoid surprising data loss. Supported
 values are `raw`, `hybrid`, `event_only`, and `aggregate_only`; `baseline`
@@ -193,14 +209,32 @@ events through the same path as rules. The artifact is mounted read-only into
 the gateway at `/app/models`. If ML is off or the artifact is missing, the
 detector disables itself and the gateway runs exactly as the rule-based system.
 
+## Edge-to-cloud verification (Phases 2–3)
+
+With asynchronous ML scoring enabled, set `CLOUD_FORWARD_MODE=gated` to send
+only anomalous readings or `CLOUD_FORWARD_MODE=all` for the comparison
+baseline. The cloud service buffers escalations per device and uses the
+LSTM-autoencoder artifact at `models/cloud_lstm_ae.npz` to confirm or suppress
+each full window. Cloud recent readings, verdicts, and counters are in memory;
+they are experimental evidence rather than a durable system of record.
+
+```bash
+# Train and offline-evaluate the cloud model
+uv run --group ml-train python scripts/train_cloud_lstm.py --evaluate
+
+# Phase 2 bandwidth A/B and Phase 3 live verification
+bash scripts/run_escalation_bandwidth_test.sh
+bash scripts/run_cloud_verification_test.sh
+```
+
 ## Thesis validation and experiments
 
 ```bash
-# 1. check shell experiment scripts parse
+# 1. check all shell experiment scripts parse
 UV_CACHE_DIR=/tmp/uv-cache uv run pytest gateway/tests/scripts/test_scripts.py -q
 
-# 2. run the full gateway test suite
-UV_CACHE_DIR=/tmp/uv-cache uv run pytest gateway/tests -q
+# 2. run the full edge + cloud test suite
+UV_CACHE_DIR=/tmp/uv-cache uv run pytest gateway/tests cloud/tests -q
 
 # 3. run clean high-throughput A/B tests
 REPETITIONS=3 just ab-high-throughput
@@ -211,6 +245,16 @@ just anomaly-detection
 # 5. train the edge ML detector and run the detection A/B
 uv run python scripts/train_anomaly_model.py --evaluate
 bash scripts/run_detection_ab_test.sh
+
+# 6. compare score-gated forwarding with all-to-cloud
+bash scripts/run_escalation_bandwidth_test.sh
+
+# 7. train/evaluate the cloud model and run live cloud verification
+uv run --group ml-train python scripts/train_cloud_lstm.py --evaluate
+bash scripts/run_cloud_verification_test.sh
+
+# 8. regenerate thesis figures from pinned result JSON
+just figures
 ```
 
 Run tests before the Docker experiments so broken scripts or gateway logic fail
@@ -219,9 +263,10 @@ baseline vs proposed using only `high_throughput.yaml`. `anomaly-detection`
 resets the database once and runs proposed-mode anomaly scenarios separately for
 event-detection evidence.
 
-The older `just baseline` and `just proposed` commands are still available for
-single exploratory runs. The thesis-focused outputs are written under
-`results/ab/high_throughput/` and `results/anomaly_detection/proposed/`.
+The older `just baseline` and `just proposed` commands remain available for
+single exploratory runs; do not use them as the clean headline comparison.
+The current evidence map and artifact policy are documented in
+[`results/README.md`](results/README.md).
 
 ## Tests
 
@@ -229,7 +274,7 @@ single exploratory runs. The thesis-focused outputs are written under
 just test
 
 # raw equivalent
-uv run pytest gateway/tests -q
+uv run pytest gateway/tests cloud/tests -q
 ```
 
 Unit tests cover the validator, rule engine, topic parser, services, workers,
@@ -242,10 +287,10 @@ repositories, scripts, and API smoke behavior.
 - Drop an additional Grafana dashboard JSON into
   `config/grafana/dashboards/` — provisioning picks it up automatically.
 - Plug a new alert channel into `gateway/app/services/alert_service.py`
-  (the webhook and Slack clients are already there; add an email
-  implementation alongside them by setting `ALERT_SLACK_WEBHOOK_URL`).
+  (console, generic webhook, and Slack exist; email requires a new adapter and
+  its own provider configuration).
 - Retrain the edge anomaly detector with
   `uv run python scripts/train_anomaly_model.py --evaluate`; the gateway loads
   the artifact from `/app/models/anomaly_iforest.joblib`.
-- Extend `model_predictions` toward forecasting / a cloud tier — the schema and
-  the edge scoring path are already in place.
+- Extend `model_predictions` toward forecasting or durable cloud verdicts; the
+  current cloud verifier keeps recent verdicts only in process memory.

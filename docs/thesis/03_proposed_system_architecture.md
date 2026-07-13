@@ -40,8 +40,8 @@ FastAPI edge gateway
 PostgreSQL/TimescaleDB
         |
         |  score-gated escalation of flagged readings (Phase 2)
-        v ----------------------------------> Cloud tier (receiver implemented;
-        |                                      heavier model = future phase)
+        v ----------------------------------> Cloud tier (receiver + LSTM-AE
+        |                                      verifier, Phase 3)
         v
 Grafana dashboards and REST API clients
 ```
@@ -60,10 +60,10 @@ The architecture follows five principles:
 ## 3.2 Energy Monitoring Node Layer
 
 The energy monitoring node is responsible for measuring electrical parameters
-and publishing structured telemetry. In the intended physical setup, this
-layer can be implemented using an STM32 microcontroller with voltage and
-current sensing hardware and an ESP8266 or ESP32 module for Wi-Fi/MQTT
-communication.
+and publishing structured telemetry. The implemented firmware targets a
+Nucleo-F429ZI and uses the microcontroller's Ethernet MAC with LwIP/MQTT. The
+intended physical setup connects it to the isolated voltage/current sensing
+front end documented under `firmware/hardware/`.
 
 The node is expected to measure:
 
@@ -84,10 +84,11 @@ Each node uses a stable device identifier such as `house_0001` or
 the message body, allowing the gateway to associate readings, status messages,
 and events with the correct source.
 
-For the current thesis evaluation, synthetic devices are produced by the MQTT
-simulator. This allows repeatable high-throughput and anomaly tests without
-depending on field hardware timing. Real STM32/ESP hardware can be connected
-to the same MQTT topic structure in future hardware validation.
+For the controlled benchmark evaluation, synthetic devices are produced by the
+MQTT simulator. Separately, the compiled STM32F429ZI firmware has published the
+same contract through Renode into the unmodified pipeline. Renode uses
+synthetic ADC waveforms, while the analog front end is validated independently
+in SPICE; a physically integrated and calibrated node remains future work.
 
 ## 3.3 MQTT Broker Layer
 
@@ -310,11 +311,11 @@ all-to-cloud baseline used for the bandwidth comparison). Forwarded readings
 are batched into compact JSON envelopes carrying the measurements plus score,
 threshold, and model version, and POSTed to a minimal cloud-tier receiver that
 counts what it receives. Forward failures are counted and dropped rather than
-retried, so edge detection never depends on cloud reachability. The remaining
-heavier cloud-side model on the escalated stream is added in Phase 3
-(Section 6.7.3): an LSTM autoencoder that confirms or suppresses escalated
-readings by reconstruction error. Edge-side storage optimization (Huang et
-al. [17]) remains staged as a later phase and is not claimed as a result here.
+retried, so edge detection never depends on cloud reachability. The cloud-side
+verification stage is implemented in Phase 3 (Section 6.7.3): an LSTM
+autoencoder confirms or suppresses escalated readings by reconstruction error.
+Edge-side storage optimization (Huang et al. [17]) remains staged as a later
+phase and is not claimed as a result here.
 
 ## 3.10 Chapter Summary
 

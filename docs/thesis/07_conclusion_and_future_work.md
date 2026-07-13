@@ -98,8 +98,10 @@ while storage optimization is staged as a later phase.
 The thesis results should be interpreted within the measured scope.
 
 First, the evaluation used a simulator rather than field hardware. The
-software pipeline was tested repeatably, but real STM32/ESP hardware behavior,
-sensor accuracy, Wi-Fi stability, and electrical measurement quality require
+software pipeline was tested repeatably, compiled STM32F429ZI firmware was
+exercised end to end in Renode, and the analog front end was checked separately
+in SPICE. A physically integrated device, calibrated sensor accuracy,
+field-network behavior, and electrical measurement quality still require
 separate validation.
 
 Second, the experiments were short local Docker runs. They demonstrate
@@ -107,12 +109,13 @@ controlled behavior but do not prove long-term production reliability,
 multi-day uptime, cloud deployment readiness, or large-scale field
 performance.
 
-Third, the ML detector's reported quality is an offline measurement on
-simulator-faithful synthetic data; the online A/B measured its operational cost
-in the live gateway and showed that per-sample inference adds ~12 ms of latency
-in the current naive implementation (an optimization target, not a fundamental
-limit). The detector is a single global Isolation Forest; per-device models,
-batched/offloaded inference, and field validation remain future work.
+Third, the ML detectors' reported quality is an offline measurement on
+simulator-derived synthetic data. The online A/B measured operational behavior
+and showed that asynchronous micro-batch scoring keeps ML work off the telemetry
+hot path, while queue delay carries the additional cost. The edge detector is
+still a single global Isolation Forest; per-device models, hardware-targeted
+optimization, genuine sequential field data, and field validation remain
+future work.
 
 Fourth, the current results do not prove storage reduction. Proposed mode
 stores additional event and operational evidence, which increased database
@@ -166,10 +169,10 @@ literature (Chapter 2.7):
 - **Per-device models.** Train a model per device rather than one global model,
   which the literature shows can improve detection on heterogeneous loads
   (Mofidul et al.).
-- **Edge inference optimization.** The online A/B showed per-sample scikit-learn
-  scoring adds ~12 ms of latency; batching, offloading to a worker thread, or a
-  lighter/quantized model would reduce this before the detector runs on
-  constrained hardware.
+- **Edge inference optimization.** Asynchronous micro-batching is implemented,
+  but scoring still uses scikit-learn in the gateway process. A worker thread,
+  lighter/quantized model, or hardware-specific runtime should be evaluated
+  before deployment on constrained physical hardware.
 
 ## 7.6 Future Storage Optimization
 

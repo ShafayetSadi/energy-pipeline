@@ -5,7 +5,8 @@
 This chapter evaluates the implemented smart energy monitoring pipeline using a
 local reproducible test environment. The evaluated system consists of an MQTT
 broker, a FastAPI edge gateway, PostgreSQL/TimescaleDB storage, Grafana
-dashboards, and a synthetic MQTT device simulator.
+dashboards, a synthetic MQTT device simulator, and—when the hybrid experiments
+are enabled—a cloud-tier verification service.
 
 The evaluation focuses on the software pipeline and gateway behavior. The
 simulator represents multiple energy monitoring devices that publish voltage,
@@ -25,10 +26,10 @@ Before interpreting the benchmark results, the automated test suite was run:
 | Test command | Result |
 | --- | ---: |
 | `UV_CACHE_DIR=/tmp/uv-cache uv run pytest gateway/tests/scripts/test_scripts.py -q` | 2 passed |
-| `UV_CACHE_DIR=/tmp/uv-cache uv run pytest gateway/tests -q` | 45 passed |
+| `UV_CACHE_DIR=/tmp/uv-cache uv run pytest gateway/tests cloud/tests -q` | 62 passed |
 
-These tests verified the script smoke tests and the current gateway behavior
-covered by the repository test suite.
+These tests verified the script smoke tests and the current edge-gateway and
+cloud-verifier behavior covered by the repository test suite.
 
 ## 5.2 Baseline and Proposed System Definition
 
@@ -58,10 +59,11 @@ Building on this baseline, the work adds an edge machine-learning detector
 (Phase 1, Section 5.5), so detection can be compared across rules-only,
 ml-only, and hybrid configurations, and a score-gated edge-to-cloud escalation
 path (Phase 2, Section 5.6), so gated forwarding can be compared against a
-naive all-to-cloud baseline. The current work does not yet claim a cloud-side
-model, storage reduction, production-grade field deployment, certified
-metering accuracy, or large-scale smart-grid validation. These are treated as
-later phases and future work.
+naive all-to-cloud baseline. Phase 3 adds a cloud-side LSTM-autoencoder
+verifier and evaluates its detection quality offline and its behavior on the
+live escalated stream. The current work does not claim storage reduction,
+production-grade field deployment, certified metering accuracy, Kubernetes
+elasticity, or large-scale smart-grid validation.
 
 ## 5.3 High-Throughput A/B Test Method
 
@@ -195,7 +197,41 @@ comparison statistic. The expected reduction follows from the gate: in gated
 mode the forwarded volume tracks the model's flag rate (roughly 7% of readings
 in the detection A/B scenarios) rather than the full telemetry stream.
 
-## 5.7 Metrics Collected
+## 5.7 Cloud-Tier Verification Method (Phase 3)
+
+The cloud verifier was evaluated in two complementary ways.
+
+**Offline two-stage quality.** The command
+`uv run --group ml-train python scripts/train_cloud_lstm.py --evaluate` trains
+the LSTM autoencoder on simulator-derived normal windows, exports
+`models/cloud_lstm_ae.npz`, and evaluates the edge-plus-cloud decision path on
+a labeled held-out set. The report under
+`results/cloud_model/offline_evaluation.json` contains precision, recall, F1,
+false-positive suppression, and verifier inference measurements. These are
+controlled synthetic-data results, not field-accuracy claims.
+
+**Online verification behavior.** The script
+`scripts/run_cloud_verification_test.sh` runs the hybrid gateway in gated mode,
+starts the cloud verifier, executes the under-voltage, overload, and power-spike
+scenarios, and captures:
+
+- gateway scoring and forwarding counters;
+- cloud batch, reading, and payload-byte counters;
+- verifier availability, windows, confirmed/suppressed counts, and latency;
+- a bounded sample of recent cloud verdicts.
+
+The live evidence is written under:
+
+```text
+results/cloud_verification/
+```
+
+The online run demonstrates integration and operational behavior. Because the
+gated live stream is selective and contains relatively few candidates, the
+offline labeled evaluation remains the appropriate source for detection-quality
+claims.
+
+## 5.8 Metrics Collected
 
 The evaluation used both simulator-side and gateway-side metrics.
 
@@ -218,7 +254,15 @@ Gateway-side metrics:
 - validation errors by type
 - `ml.scored` and `ml.anomalies` counters (when ML is enabled)
 - `model_predictions` counts and anomaly-score statistics
-- telemetry, status, and `ml_inference` latency percentiles
+- cloud forwarded readings, batches, bytes, failures, and forwarding latency
+- telemetry, status, `ml_inference`, and `ml_queue` latency percentiles
+
+Cloud-side metrics:
+
+- escalation batches, readings, and application-payload bytes received
+- verifier windows and readings scored
+- confirmed and suppressed verdict counts
+- average verifier inference latency
 
 Latency was reported using average, p50, p95, and p99 values. These values
 were exported from the gateway metrics snapshot and summarized in generated
@@ -231,7 +275,7 @@ discussion, not as a storage-optimization result. Both modes store raw
 readings, and the proposed mode also stores event evidence. Therefore, the
 current experiment does not support a storage-reduction claim.
 
-## 5.8 Data Collection Procedure
+## 5.9 Data Collection Procedure
 
 The high-throughput A/B test and anomaly detection experiment generated
 machine-readable and human-readable artifacts.
@@ -266,29 +310,45 @@ This directory contains:
 - `report.md`
 - database-size snapshots
 
+The ML and hybrid evidence was stored under:
+
+```text
+results/anomaly_model/
+results/detection_ab/{rules,ml,hybrid}/
+results/escalation_bandwidth/{gated,all}/
+results/cloud_model/
+results/cloud_verification/
+```
+
+These folders separate offline model-quality evidence from online operational
+evidence. `results/README.md` is the current execution and artifact map.
+
 The exported reports were used to build the result tables in Chapter 6.
 Grafana dashboards were used as visual evidence that readings, events,
 validation behavior, and system metrics can be inspected during and after the
 experiments.
 
-## 5.9 Experimental Limitations
+## 5.10 Experimental Limitations
 
 The evaluation has several limitations.
 
-First, the tests use synthetic simulator workloads. The results demonstrate
-the gateway and data pipeline behavior, but they do not prove performance with
-real STM32 or ESP-based hardware under field conditions.
+First, the benchmark and detection experiments use synthetic simulator
+workloads. Separately, compiled STM32F429ZI firmware has published through the
+live MQTT/backend pipeline in Renode, and the analog front end has been
+validated in SPICE. These results still do not prove physically integrated
+hardware behavior, field-network reliability, calibrated metering accuracy, or
+electrical-safety compliance.
 
 Second, the experiments are short local Docker runs. They show repeatable
 behavior under controlled test conditions, but they do not prove multi-day
 production reliability or deployment readiness.
 
-Third, the machine-learning detector is evaluated offline on simulator-faithful
-synthetic data, and in the live pipeline only its operational cost is measured.
-The offline precision/recall therefore reflects detection quality on controlled
-data, not field accuracy. The detector is also a single global Isolation Forest;
-per-device models (which the literature shows can perform better) and the cloud
-tier with score-gated escalation remain future phases.
+Third, both ML models are evaluated for quality on simulator-derived labeled
+data. The online runs measure integration, latency, queueing, forwarding, and
+verifier behavior; they do not establish field detection accuracy. The edge
+detector remains one global Isolation Forest, and the cloud verifier's current
+window treatment is not evidence of performance on genuine field time series.
+Per-device models and real sequential field evaluation remain future work.
 
 Fourth, storage reduction is not measured as a successful result. The proposed
 mode writes additional event records, so database growth is expected. Selective

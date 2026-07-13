@@ -47,7 +47,10 @@ measurement error into the gateway analysis.
 
 The simulator-based approach is appropriate for evaluating ingestion latency,
 rule-processing overhead, validation behavior, and dashboard observability.
-Real STM32/ESP hardware validation remains future work.
+Compiled STM32F429ZI firmware has also been exercised in Renode through the
+live MQTT/backend path, and the sensing front end has been validated separately
+in SPICE. Physical integration, calibration, and field validation remain future
+work.
 
 ## 2.3 MQTT in IoT Communication
 
