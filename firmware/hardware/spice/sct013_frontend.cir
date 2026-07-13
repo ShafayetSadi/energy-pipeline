@@ -8,7 +8,7 @@
 * winding implies an effective burden of 66.7R: 10 A / 2000 * 66.7R = 0.333 Vrms.
 *   - the CT secondary is galvanically isolated, so its cold end is tied
 *     straight to the 1.65 V mid-rail bias (shared with the V channel)
-*   - R5/C2 anti-aliasing RC identical to the voltage channel so both
+*   - R6/C3 anti-aliasing RC identical to the voltage channel so both
 *     channels see the same phase shift (matters for real-power accuracy)
 *
 * Run:  ngspice -b sct013_frontend.cir
@@ -26,17 +26,17 @@ Iload   0     lp    SIN(0 14.142 50 1.0111m)
 Lpri    lp    0     1m
 Lsec    s1    bias  4000                    ; N^2 * Lpri, N = 2000
 Ksct    Lpri  Lsec  0.9999
-Rburden s1    bias  66.7                    ; internal burden of the -030
+R7      s1    bias  66.7                    ; internal burden of the -030
 
 * --- 3.3 V rail and mid-rail bias ---
 Vdd     vdd   0     DC 3.3
 R3      vdd   bias  10k
 R4      bias  0     10k
-Cbias   bias  0     10u
+C1      bias  0     10u
 
 * --- anti-aliasing filter into the ADC pin ---
-R5      s1    adc_i 1k
-C2      adc_i 0     100n                    ; ADC pin PA1
+R6      s1    adc_i 1k
+C3      adc_i 0     100n                    ; ADC pin PA1
 
 .tran 20u 300m 100m
 

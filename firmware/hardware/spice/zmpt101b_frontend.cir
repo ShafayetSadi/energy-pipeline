@@ -2,14 +2,14 @@
 * -----------------------------------------------------
 * Mains 230 Vrms / 50 Hz is sensed through a ZMPT101B, a 2 mA : 2 mA
 * precision current transformer for voltage measurement:
-*   - Rpri limits primary current: 230 V / 100k = 2.3 mArms
+*   - R1 limits primary current: 230 V / 100k = 2.3 mArms
 *   - the 1:1 CT mirrors that current into the secondary
-*   - Rburden converts it back to a voltage: 2.3 mA * 330R = 0.76 Vrms
+*   - R2 converts it back to a voltage: 2.3 mA * 330R = 0.76 Vrms
 *     (peak 1.07 V around the 1.65 V bias -> 0.58..2.72 V at the ADC,
 *     leaving headroom up to ~280 Vrms mains before clipping)
 *   - the secondary is galvanically isolated, so its cold end is tied
 *     straight to the 1.65 V mid-rail bias (R3/R4 divider, stiffened by
-*     Cbias) — no AC-coupling capacitor needed, no settling transient
+*     C1) — no AC-coupling capacitor needed, no settling transient
 *   - R5/C2 is the anti-aliasing RC (fc = 1/(2*pi*1k*100n) = 1.6 kHz;
 *     firmware samples at 5 kHz, well above fc, mains harmonics pass)
 *
@@ -20,20 +20,20 @@
 Vmains  mains 0     SIN(0 325.27 50)        ; 230 Vrms = 325.27 Vpk, 50 Hz
 
 * --- ZMPT101B: primary limiter + 1:1 coupled transformer ---
-Rpri    mains p1    100k                    ; primary current-limit resistor
+R1      mains p1    100k                    ; primary current-limit resistor
 * 100 H magnetizing inductance: the ZMPT101B is a precision measurement
 * transformer; too little Lm makes the burden current lead by
 * atan(Rb/(w*Lm)) and corrupts the power-factor measurement.
 Lpri    p1    0     100H
 Lsec    s1    bias  100H                    ; isolated secondary rides on bias
 Kzmpt   Lpri  Lsec  0.9999                  ; near-ideal 1:1 CT
-Rburden s1    bias  330                     ; burden -> 0.76 Vrms
+R2      s1    bias  330                     ; burden -> 0.76 Vrms
 
 * --- 3.3 V rail and mid-rail bias ---
 Vdd     vdd   0     DC 3.3
 R3      vdd   bias  10k
 R4      bias  0     10k
-Cbias   bias  0     10u                     ; stiffens the bias rail
+C1      bias  0     10u                     ; stiffens the bias rail
 
 * --- anti-aliasing filter into the ADC pin ---
 R5      s1    adc_v 1k

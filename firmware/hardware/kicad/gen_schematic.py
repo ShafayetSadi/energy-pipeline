@@ -7,12 +7,14 @@ shared 1.65 V mid-rail bias, headers to the Nucleo-F429ZI.
 
 Symbols are embedded verbatim from the system KiCad libraries, so the
 file opens standalone. Run:  python3 gen_schematic.py
-Then check:  kicad-cli sch erc energy-node.kicad_sch
+Then check:  kicad-cli sch export netlist energy-node.kicad_sch
 """
 
+import argparse
 import math
 import re
 import uuid
+from pathlib import Path
 
 LIBDIR = '/usr/share/kicad/symbols'
 
@@ -64,6 +66,7 @@ def pin_pos(lib_id, num, x, y, rot):
 symbols = []   # instance s-expressions
 wires = []
 labels = []
+notes = []
 used_libs = {}
 
 
@@ -116,104 +119,147 @@ def label(p, text, rot=0):
                   f' (uuid {uuid.uuid4()}))')
 
 
-# ============================================================
-# Voltage channel: rows y=36.83 (hot) / 46.99 (cold), grid 1.27
-# ============================================================
-add('Connector_Generic:Conn_01x02', 'J1', 'MAINS 230V', 40, 39.37, rot=180,
-    ref_off=(-8.9, -5.1), val_off=(-16.5, 7.6))
-j1_hot = pin_pos('Connector_Generic:Conn_01x02', '2', 40, 39.37, 180)   # (45.08, 36.83)
-j1_cold = pin_pos('Connector_Generic:Conn_01x02', '1', 40, 39.37, 180)  # (45.08, 39.37)
+def note(p, text, size=1.6, bold=False):
+    """Add human-readable documentation without changing electrical nets."""
+    weight = ' bold' if bold else ''
+    notes.append(
+        f'  (text "{text}" (at {p[0]} {p[1]} 0)'
+        f' (effects (font (size {size} {size}){weight}) (justify left bottom))'
+        f' (uuid {uuid.uuid4()}))'
+    )
 
-add('Device:R', 'R1', '100k 1W', 55.88, 36.83, rot=90, ref_off=(-3.8, -3.8), val_off=(-5.1, 3.8))
-wire(j1_hot, (52.07, 36.83))
-add('Device:Transformer_1P_1S', 'T1', 'ZMPT101B', 76.2, 41.91,
+
+# ============================================================
+# 1. Voltage channel: 230 V AC -> isolation/scaling -> filter -> PA0
+# ============================================================
+note((25, 30), '1. VOLTAGE SENSING CHANNEL', size=2.54, bold=True)
+note((25, 34), '230 V AC -> galvanic isolation and scaling -> anti-alias filter -> PA0 voltage ADC')
+
+add('Connector_Generic:Conn_01x02', 'J1', 'MAINS 230V AC', 35, 55, rot=180,
+    ref_off=(-8.9, -5.1), val_off=(2.5, 7.6))
+j1_hot = pin_pos('Connector_Generic:Conn_01x02', '2', 35, 55, 180)
+j1_cold = pin_pos('Connector_Generic:Conn_01x02', '1', 35, 55, 180)
+
+add('Device:R', 'R1', '100k 1W', 65, 52.46, rot=90,
+    ref_off=(-3.8, -3.8), val_off=(-6.4, 3.8))
+wire(j1_hot, (61.19, 52.46))
+add('Device:Transformer_1P_1S', 'T1', 'ZMPT101B', 100, 57.54,
     ref_off=(-2.5, -8.9), val_off=(-6.4, 10.2))
-wire((59.69, 36.83), (66.04, 36.83))            # R1 -> T1 primary top
-wire(j1_cold, (48.26, 39.37))
-wire((48.26, 39.37), (48.26, 46.99))
-wire((48.26, 46.99), (66.04, 46.99))            # -> T1 primary bottom
+wire((68.81, 52.46), (89.84, 52.46))
+wire(j1_cold, (45, 55))
+wire((45, 55), (45, 62.62))
+wire((45, 62.62), (89.84, 62.62))
 
-# secondary: hot row 36.83 from pin4, cold row 46.99 from pin3
-add('Device:R', 'R2', '330 0.1%', 91.44, 41.91, ref_off=(2.5, 1.3), val_off=(2.5, 3.8))
-wire((86.36, 36.83), (91.44, 36.83))
-wire((91.44, 36.83), (91.44, 38.1))             # stub to R2.1
-wire((86.36, 46.99), (91.44, 46.99))
-wire((91.44, 46.99), (91.44, 45.72))            # stub to R2.2
+add('Device:R', 'R2', '330 0.1%', 125, 57.54,
+    ref_off=(2.5, 1.3), val_off=(2.5, 3.8))
+wire((110.16, 52.46), (125, 52.46))
+wire((125, 52.46), (125, 53.73))
+wire((110.16, 62.62), (125, 62.62))
+wire((125, 62.62), (125, 61.35))
 
-add('Device:R', 'R5', '1k', 99.06, 36.83, rot=90, ref_off=(-3.8, -3.8), val_off=(1.3, -3.8))
-wire((91.44, 36.83), (95.25, 36.83))
-add('Device:C', 'C2', '100n', 107.95, 43.18, ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
-wire((102.87, 36.83), (107.95, 36.83))
-wire((107.95, 36.83), (114.3, 36.83))
-label((114.3, 36.83), 'PA0')
-junction((107.95, 36.83))
-wire((107.95, 36.83), (107.95, 39.37))          # down to C2.1
-add('power:GND', '#PWR01', 'GND', 107.95, 49.53)
-wire((107.95, 46.99), (107.95, 49.53))
+add('Device:R', 'R5', '1k', 145, 52.46, rot=90,
+    ref_off=(-3.8, -3.8), val_off=(1.3, -3.8))
+wire((125, 52.46), (141.19, 52.46))
+add('Device:C', 'C2', '100n', 165, 58.81,
+    ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
+wire((148.81, 52.46), (165, 52.46))
+wire((165, 52.46), (185, 52.46))
+label((185, 52.46), 'PA0')
+junction((165, 52.46))
+wire((165, 52.46), (165, 55))
+add('power:GND', '#PWR01', 'GND', 165, 68.97)
+wire((165, 62.62), (165, 68.97))
 
-p = vwire((91.44, 46.99), 3.81)
+p = vwire((125, 62.62), 5.08)
 label(p, 'V_BIAS', rot=270)
 
+note((105, 69), 'R2 converts the isolated transformer current into a measurable voltage.', size=1.35)
+note((105, 72), 'R5 + C2 form a 1.6 kHz low-pass filter before the STM32 ADC.', size=1.35)
+note((25, 80), 'SAFETY: J1 is mains voltage; use rated isolation, protection, and enclosure.',
+     size=1.35, bold=True)
+
 # ============================================================
-# Current channel: rows y=64.77 (hot) / 74.93 (cold)
+# 2. Current channel: clamp output -> burden -> filter -> PA1
 # ============================================================
-add('Connector_Generic:Conn_01x02', 'J2', 'SCT-013-030 jack', 40, 67.31, rot=180,
-    ref_off=(-8.9, -5.1), val_off=(-8.9, 7.6))
-j2_hot = pin_pos('Connector_Generic:Conn_01x02', '2', 40, 67.31, 180)   # (45.08, 64.77)
-j2_cold = pin_pos('Connector_Generic:Conn_01x02', '1', 40, 67.31, 180)  # (45.08, 67.31)
+note((25, 87), '2. CURRENT SENSING CHANNEL', size=2.54, bold=True)
+note((25, 91), 'SCT-013-030 clamp output -> internal burden -> anti-alias filter -> PA1 current ADC')
 
-add('Device:R', 'R7', '66.7 (internal)', 76.2, 69.85, ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
-wire(j2_hot, (76.2, 64.77))
-wire((76.2, 64.77), (76.2, 66.04))              # stub to R7.1
-wire(j2_cold, (48.26, 67.31))
-wire((48.26, 67.31), (48.26, 74.93))
-wire((48.26, 74.93), (76.2, 74.93))
-wire((76.2, 74.93), (76.2, 73.66))              # stub to R7.2
+add('Connector_Generic:Conn_01x02', 'J2', 'SCT-013-030 JACK', 35, 105, rot=180,
+    ref_off=(-8.9, -5.1), val_off=(2.5, 7.6))
+j2_hot = pin_pos('Connector_Generic:Conn_01x02', '2', 35, 105, 180)
+j2_cold = pin_pos('Connector_Generic:Conn_01x02', '1', 35, 105, 180)
 
-add('Device:R', 'R6', '1k', 86.36, 64.77, rot=90, ref_off=(-3.8, -3.8), val_off=(1.3, -3.8))
-wire((76.2, 64.77), (82.55, 64.77))
-add('Device:C', 'C3', '100n', 95.25, 71.12, ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
-wire((90.17, 64.77), (95.25, 64.77))
-wire((95.25, 64.77), (101.6, 64.77))
-label((101.6, 64.77), 'PA1')
-junction((95.25, 64.77))
-wire((95.25, 64.77), (95.25, 67.31))            # down to C3.1
-add('power:GND', '#PWR02', 'GND', 95.25, 77.47)
-wire((95.25, 74.93), (95.25, 77.47))
+add('Device:R', 'R7', '66.7 internal', 105, 107.54,
+    ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
+wire(j2_hot, (105, 102.46))
+wire((105, 102.46), (105, 103.73))
+wire(j2_cold, (45, 105))
+wire((45, 105), (45, 112.62))
+wire((45, 112.62), (105, 112.62))
+wire((105, 112.62), (105, 111.35))
 
-p = hwire((76.2, 74.93), 3.81)
+add('Device:R', 'R6', '1k', 145, 102.46, rot=90,
+    ref_off=(-3.8, -3.8), val_off=(1.3, -3.8))
+wire((105, 102.46), (141.19, 102.46))
+add('Device:C', 'C3', '100n', 165, 108.81,
+    ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
+wire((148.81, 102.46), (165, 102.46))
+wire((165, 102.46), (185, 102.46))
+label((185, 102.46), 'PA1')
+junction((165, 102.46))
+wire((165, 102.46), (165, 105))
+add('power:GND', '#PWR02', 'GND', 165, 118.97)
+wire((165, 112.62), (165, 118.97))
+
+p = hwire((105, 112.62), 10.16)
 label(p, 'V_BIAS')
 
-# ============================================================
-# Bias generator
-# ============================================================
-add('power:+3V3', '#PWR03', '+3V3', 40, 106.68)
-add('Device:R', 'R3', '10k', 40, 110.49, ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
-wire((40, 114.3), (40, 116.84))
-add('Device:R', 'R4', '10k', 40, 120.65, ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
-add('power:GND', '#PWR04', 'GND', 40, 127)
-wire((40, 124.46), (40, 127))
-add('Device:C_Polarized', 'C1', '10u', 52.07, 120.65, ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
-wire((40, 116.84), (52.07, 116.84))
-add('power:GND', '#PWR05', 'GND', 52.07, 127)
-wire((52.07, 124.46), (52.07, 127))
-p = hwire((52.07, 116.84), 7.62)
-label(p, 'V_BIAS')
+note((105, 123), "R7 is the sensor's internal 66.7 ohm burden; do not add a second burden.", size=1.35)
+note((105, 126), 'R6 + C3 match the voltage-channel filter so phase error stays aligned.', size=1.35)
 
 # ============================================================
-# Nucleo header + power flags
+# 3. Shared 1.65 V ADC midpoint bias
 # ============================================================
-add('Connector_Generic:Conn_01x04', 'J3', 'to Nucleo-F429ZI CN9/CN8', 130, 110, rot=180,
-    ref_off=(-8.9, -8.9), val_off=(-26.7, 11.4))
-j3 = {n: pin_pos('Connector_Generic:Conn_01x04', n, 130, 110, 180) for n in '1234'}
-p = hwire(j3['1'], 7.62); label(p, 'PA0')
-p = hwire(j3['2'], 7.62); label(p, 'PA1')
-p = hwire(j3['3'], 12.7)
+note((25, 137), '3. SHARED ADC BIAS (MIDPOINT)', size=2.54, bold=True)
+note((25, 141), 'R3 and R4 make 1.65 V; C1 stabilizes it. This shifts both AC waveforms into the 0-3.3 V ADC range.',
+     size=1.5)
+
+add('power:+3V3', '#PWR03', '+3V3', 65, 148)
+add('Device:R', 'R3', '10k', 65, 151.81,
+    ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
+wire((65, 155.62), (65, 158.16))
+add('Device:R', 'R4', '10k', 65, 161.97,
+    ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
+add('power:GND', '#PWR04', 'GND', 65, 168.32)
+wire((65, 165.78), (65, 168.32))
+add('Device:C_Polarized', 'C1', '10u', 90, 161.97,
+    ref_off=(2.5, -1.3), val_off=(2.5, 1.3))
+wire((65, 158.16), (90, 158.16))
+add('power:GND', '#PWR05', 'GND', 90, 168.32)
+wire((90, 165.78), (90, 168.32))
+p = hwire((90, 158.16), 20)
+label(p, 'V_BIAS')
+note((105, 163), 'V_BIAS = 1.65 V reference for both sensor channels', size=1.35, bold=True)
+
+# ============================================================
+# 4. Nucleo header + power flags
+# ============================================================
+note((195, 132), 'Power-flag symbols are KiCad checks for supplied 3V3/GND; they are not physical parts.', size=1.25)
+note((195, 137), '4. NUCLEO-F429ZI CONNECTIONS', size=2.54, bold=True)
+note((195, 141), 'PA0 = voltage samples; PA1 = current samples', size=1.5)
+note((195, 145), 'Matching net labels connect signals without long crossing wires.', size=1.25)
+
+add('Connector_Generic:Conn_01x04', 'J3', 'TO NUCLEO-F429ZI CN9/CN8', 220, 157, rot=180,
+    ref_off=(-8.9, -8.9), val_off=(-25.4, -6.35))
+j3 = {n: pin_pos('Connector_Generic:Conn_01x04', n, 220, 157, 180) for n in '1234'}
+p = hwire(j3['1'], 10.16); label(p, 'PA0')
+p = hwire(j3['2'], 10.16); label(p, 'PA1')
+p = hwire(j3['3'], 17.78)
 add('power:+3V3', '#PWR06', '+3V3', p[0], p[1])
-add('power:PWR_FLAG', '#FLG01', 'PWR_FLAG', p[0] - 6.35, p[1])
-p = hwire(j3['4'], 12.7)
+add('power:PWR_FLAG', '#FLG01', 'PWR_FLAG', p[0] - 7.62, p[1])
+p = hwire(j3['4'], 17.78)
 add('power:GND', '#PWR07', 'GND', p[0], p[1])
-add('power:PWR_FLAG', '#FLG02', 'PWR_FLAG', p[0] - 6.35, p[1])
+add('power:PWR_FLAG', '#FLG02', 'PWR_FLAG', p[0] - 7.62, p[1])
 
 # ============================================================
 # emit file
@@ -223,17 +269,22 @@ libblocks = '\n'.join(grab_symbol(*lib_id.split(':')) for lib_id in used_libs)
 out = f'''(kicad_sch (version 20230121) (generator gen_schematic.py)
   (uuid 00000000-0000-0000-0000-000000000000)
   (paper "A4")
-  (title_block (title "Energy node - analog front-end") (date "2026-07-12")
+  (title_block (title "Energy node - analog front-end") (date "2026-07-13")
     (rev "1") (company "BSc thesis")
-    (comment 1 "Matches spice/*.cir; ZMPT101B->PA0, SCT-013-030->PA1"))
+    (comment 1 "SPICE-verified analog front-end"))
   (lib_symbols
 {libblocks}
   )
 {chr(10).join(wires)}
 {chr(10).join(labels)}
+{chr(10).join(notes)}
 {chr(10).join(symbols)}
   (sheet_instances (path "/" (page "1")))
 )
 '''
-open('energy-node.kicad_sch', 'w').write(out)
-print('wrote energy-node.kicad_sch')
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--output', default='energy-node.kicad_sch', help='output schematic path')
+args = parser.parse_args()
+output = Path(args.output)
+output.write_text(out)
+print(f'wrote {output}')

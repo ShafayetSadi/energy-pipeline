@@ -21,13 +21,35 @@ Each channel passes through an identical 1 kΩ / 100 nF anti-aliasing RC
 (fc ≈ 1.6 kHz, matched so both channels get the same phase shift — this
 matters for real-power accuracy). Firmware samples at 5 kHz.
 
+## How to read the KiCad schematic
+
+Read the numbered blocks from top to bottom:
+
+1. **Voltage sensing:** J1 accepts the mains sample, R1 limits current, T1
+   provides isolation, R2 converts the transformer output to a voltage, and
+   R5/C2 filter the signal before it reaches **PA0**.
+2. **Current sensing:** J2 accepts the SCT-013-030 clamp output. Its internal
+   R7 burden produces a voltage, and R6/C3 filter it before **PA1**.
+3. **ADC bias:** R3/R4 create **V_BIAS = 1.65 V** and C1 stabilizes it. The
+   midpoint lets the STM32 ADC represent both halves of each AC waveform.
+4. **Nucleo connection:** matching `PA0`, `PA1`, `V_BIAS`, `3V3`, and `GND`
+   net labels are electrically connected even when KiCad does not draw a long
+   wire between the matching names. The small power-flag symbols by J3 only
+   tell KiCad that 3V3 and GND are supplied; they are not physical components.
+
+The component prefix indicates its type: `J` = connector, `R` = resistor,
+`C` = capacitor, and `T` = transformer/sensor. J1 is a mains-voltage input and
+requires appropriately rated isolation, protection, clearances, and enclosure;
+it is not a breadboard circuit.
+
 ## Files
 
 - `kicad/` — proper KiCad 7 project of the same circuit
   (`energy-node.kicad_sch`, generated reproducibly by `gen_schematic.py`).
   Netlist-verified: every net matches `spice/*.cir` (PA0 ← R5/C2,
   PA1 ← R6/C3, V_BIAS ties both sensor cold ends to the R3/R4/C1 bias).
-  Export PDF/SVG with `kicad-cli sch export pdf energy-node.kicad_sch`,
+  The A4 layout includes numbered explanations for thesis readers. Export
+  PDF/SVG with `kicad-cli sch export pdf energy-node.kicad_sch`,
   or open in KiCad (eeschema) to edit or continue to PCB layout.
 - `schematic.py` — draws `energy_node_schematic.{svg,png}` (schemdraw)
 - `spice/zmpt101b_frontend.cir` — voltage channel, ngspice
