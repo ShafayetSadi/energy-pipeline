@@ -1,10 +1,19 @@
 # Analog Front-End — Circuit Design & SPICE Simulation
 
-This directory covers the part of the IoT node that Renode cannot emulate:
+> ⚠️ **Describes the earlier design** (SCT-013-030 current sensor, raw ZMPT101B
+> transformer, Nucleo-F429ZI, 5 kHz). The current build (see `../PLAN.md`) uses
+> **ACS712-5A** as the primary current sensor, the **ZMPT101B module** (onboard
+> op-amp + gain pot), a **Black Pill STM32F411**, and 3.2 kHz sampling. The
+> methodology below is reusable, but the specific circuit and numbers will be
+> revised **after bench-testing the real modules** — simulating the modules from
+> datasheets before measuring them would document fiction.
+
+This directory covers the part of the IoT node no simulator can emulate:
 the analog sensing circuit between the mains and the STM32's ADC pins.
 The circuit is designed in full, simulated in **ngspice**, and its simulated
 ADC waveforms are fed through the same math the firmware runs
-(`app/sensor_sim.c: sensor_measure`) to verify the whole measurement chain.
+(`blackpill-node/app/metrology.c: metrology_compute`) to verify the whole
+measurement chain.
 
 ## Circuit overview (see `energy_node_schematic.svg`)
 
@@ -89,8 +98,8 @@ Result (design-value calibration, no per-unit trimming):
 
 The residual errors come from transformer magnetizing losses in the model —
 exactly the class of error that per-device calibration constants absorb on
-real hardware (the firmware's `V_CAL`/`I_CAL` would be trimmed against a
-reference meter).
+real hardware (the firmware's `CAL_V_SCALE`/`CAL_I_SCALE` in
+`blackpill-node/config.h` would be trimmed against a reference meter).
 
 ## Design notes / lessons captured from simulation
 
@@ -109,7 +118,7 @@ reference meter).
 
 This is a circuit-level SPICE validation of the front-end design plus a
 numerical replication of the firmware's sample processing. It is **not**
-a co-simulation: the compiled firmware binary (validated in Renode) and the
-SPICE circuit run in separate tools, joined at the ADC-sample boundary.
+a co-simulation: the firmware's `metrology_compute` math and the SPICE
+circuit run in separate tools, joined at the ADC-sample boundary.
 Component tolerances, ADC quantization noise, and sensor non-linearity are
 future hardware work.

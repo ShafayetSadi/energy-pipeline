@@ -37,6 +37,9 @@ models/*.joblib
 Thumbs.db
 firmware/blackpill-node/test/test_metrology
 firmware/hardware/spice/adc_*.txt
+firmware/hardware/spice/frontend_waveforms.png
+firmware/hardware/energy_node_schematic.png
+firmware/hardware/energy_node_schematic.svg
 firmware/hardware/kicad/render/
 firmware/hardware/kicad/*.net
 firmware/hardware/kicad/*.pdf

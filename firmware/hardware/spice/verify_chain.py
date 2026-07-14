@@ -4,7 +4,7 @@
 Reads the ADC-node waveforms dumped by ngspice (adc_v.txt, adc_i.txt),
 applies the same processing the firmware performs on ADC samples
 (remove mid-rail bias -> scale by calibration constant -> RMS / mean(v*i),
-see app/sensor_sim.c:sensor_measure), and compares the recovered
+see blackpill-node/app/metrology.c:metrology_compute), and compares the recovered
 voltage / current / power against the true values driven into the circuit.
 
 Run after both ngspice simulations:
