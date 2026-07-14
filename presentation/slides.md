@@ -318,7 +318,9 @@ Define baseline carefully: it still validates enough to accept a typed reading, 
 -->
 
 ---
+
 class: diagram-slide
+
 ---
 
 <div class="section-label">Architecture</div>
@@ -375,7 +377,9 @@ Walk left to right. The thesis architecture includes the cloud target, while cur
 -->
 
 ---
+
 class: diagram-slide
+
 ---
 
 <div class="section-label">System diagram</div>
@@ -418,7 +422,9 @@ Emphasize the two branches: invalid messages become quality evidence; valid mess
 -->
 
 ---
+
 class: diagram-slide
+
 ---
 
 <div class="section-label">Hardware system</div>
@@ -777,8 +783,10 @@ Ask for decisions, not only feedback. The current presentation deliberately stop
 -->
 
 ---
+
 layout: center
 class: text-center
+
 ---
 
 <div class="section-label">Proposed thesis claim</div>
@@ -796,8 +804,10 @@ End on the claim, then invite the supervisor to discuss scope. Do not end on the
 -->
 
 ---
+
 layout: center
 class: text-center
+
 ---
 
 <div class="section-label">Appendix</div>
@@ -851,7 +861,9 @@ class: text-center
 </div>
 
 ---
+
 class: diagram-slide
+
 ---
 
 <div class="section-label">Appendix C · Gateway internals</div>
@@ -893,17 +905,17 @@ flowchart TB
 
 # Implementation stack
 
-| Layer | Technology | Responsibility |
-|---|---|---|
+| Layer          | Technology                            | Responsibility                                             |
+| -------------- | ------------------------------------- | ---------------------------------------------------------- |
 | Sensing design | ZMPT101B, SCT-013-030, KiCad, ngspice | Isolated voltage/current acquisition and analog validation |
-| Firmware | STM32F429ZI, LwIP, MQTT | Sampling, electrical calculations, network publishing |
-| Messaging | Eclipse Mosquitto | Publish/subscribe decoupling |
-| Edge gateway | FastAPI, Pydantic, SQLAlchemy async | Validation, detection, APIs, metrics, workers |
-| Edge ML | scikit-learn Isolation Forest | Lightweight unsupervised anomaly scoring |
-| Storage | PostgreSQL + TimescaleDB + Alembic | Time-series and operational evidence |
-| Visualization | Grafana | Five provisioned dashboards |
-| Cloud target | Central ingestion + data platform | Cross-site aggregation, archive, analytics, and dashboards |
-| Experiments | Docker Compose, Bash/Python harnesses | Controlled A/B execution and evidence export |
+| Firmware       | STM32F429ZI, LwIP, MQTT               | Sampling, electrical calculations, network publishing      |
+| Messaging      | Eclipse Mosquitto                     | Publish/subscribe decoupling                               |
+| Edge gateway   | FastAPI, Pydantic, SQLAlchemy async   | Validation, detection, APIs, metrics, workers              |
+| Edge ML        | scikit-learn Isolation Forest         | Lightweight unsupervised anomaly scoring                   |
+| Storage        | PostgreSQL + TimescaleDB + Alembic    | Time-series and operational evidence                       |
+| Visualization  | Grafana                               | Five provisioned dashboards                                |
+| Cloud target   | Central ingestion + data platform     | Cross-site aggregation, archive, analytics, and dashboards |
+| Experiments    | Docker Compose, Bash/Python harnesses | Controlled A/B execution and evidence export               |
 
 ---
 
