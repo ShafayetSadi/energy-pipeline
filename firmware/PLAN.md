@@ -135,5 +135,4 @@ firmware/
       telemetry.[ch]     JSON payload builder (pipeline schema 1.0)
     test/                host unit tests for metrology (no hardware)
     esp01/               ESP8266 MQTT-bridge sketch (Arduino/PubSubClient)
-  hardware/              analog front-end schematic + ngspice sims
 ```
