@@ -35,7 +35,7 @@ models/*.joblib
 # OS
 .DS_Store
 Thumbs.db
-firmware/node-f429zi/Debug/
+firmware/blackpill-node/test/test_metrology
 firmware/hardware/spice/adc_*.txt
 firmware/hardware/kicad/render/
 firmware/hardware/kicad/*.net
