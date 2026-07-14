@@ -53,6 +53,13 @@ synthesized resistive and 60°-lagging waveforms.
 4. Bring up in order (LED/UART → low-voltage AC → calibrate → 220 V) as in
    **PLAN.md §7**.
 
+## Simulation
+
+To develop/demonstrate the firmware before hardware, see
+[`../docs/simulation.md`](../docs/simulation.md) — Proteus VSM setup (runs the
+`.elf` with injected sensor signals + virtual scope/terminal) plus the other
+simulation layers.
+
 ## Note
 
 Renode is gone: it cannot emulate the analog front-end, so there is no
