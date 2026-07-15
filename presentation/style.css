@@ -26,7 +26,7 @@
 }
 
 .slidev-layout:not(.cover)::after {
-  content: "WattFlow · Thesis Idea & Progress";
+  content: "WattFlow · Current Project Status";
   position: absolute;
   right: 34px;
   bottom: 16px;

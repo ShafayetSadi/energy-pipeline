@@ -1,0 +1,66 @@
+\documentclass[border=8pt]{standalone}
+\usepackage{circuitikz}
+\usetikzlibrary{positioning,calc}
+
+\begin{document}
+\begin{circuitikz}[
+    font=\small,
+    block/.style={draw, thick, rounded corners, minimum height=12mm,
+                  minimum width=22mm, align=center, fill=black!3},
+  ]
+
+  % ===================== MAINS POWER LOOP ==============================
+  % L rail (top): source -> ACS712 (inline) -> Load
+  % N rail (bot): Load -> back to source
+  \coordinate (srcT) at (0,3.4);
+  \coordinate (srcB) at (0,0);
+  \draw (srcB) to[sV, l=220\,V\\AC, align=center] (srcT);
+
+  \node[block] (acs)  at (4.6,3.4) {ACS712-5A\\inline CT\\(SCT-013 alt.)};
+  \node[block] (load) at (7.2,3.4) {Load};
+
+  \draw (srcT) -- (acs.west);                 % L rail
+  \draw (acs.east) -- (load.west);
+  \draw (load.east) -- (8.8,3.4) -- (8.8,0) -- (srcB);   % N rail return
+
+  % ---- ZMPT101B taps voltage across L / N -----------------------------
+  \node[block] (zmpt) at (2.2,1.5) {ZMPT101B\\isolated\\gain pot};
+  \draw (1.2,3.4) coordinate(ltap) |- (zmpt.north west);   % L tap
+  \draw (2.2,0)   coordinate(ntap) -- (zmpt.south);        % N tap
+  \node[circ] at (ltap) {}; \node[circ] at (ntap) {};
+
+  % ===================== STM32F411 ====================================
+  \node[block, minimum width=32mm, minimum height=34mm] (mcu) at (13,1.2)
+        {STM32F411\\``Black Pill''\\[3pt] TIM$\to$ADC$\to$DMA\\[2pt]
+         RMS / P / PF\\(FPU)};
+  \coordinate (pin0) at (mcu.west |- {$(mcu.north west)!0.30!(mcu.south west)$});
+  \coordinate (pin1) at (mcu.west |- {$(mcu.north west)!0.70!(mcu.south west)$});
+  \node[left=1pt of pin0, font=\scriptsize] {PA0};
+  \node[left=1pt of pin1, font=\scriptsize] {PA1};
+
+  % ---- Voltage chain: ZMPT -> PA0 (with 3.3 V clamp) ------------------
+  \draw (zmpt.east) -- (9.4,1.5) coordinate (va);
+  \draw (va) to[zzD, l_=3.3\,V, mirror] ++(0,1.6) node[vcc, above]{3.3\,V};
+  \draw (va) -- (va -| mcu.west) -- (pin0);
+
+  % ---- Current chain: ACS712 Vout -> 6.8k/10k divider -> PA1 ----------
+  \draw (acs.south) -- (4.6,-2.0) coordinate (iout);
+  \draw (iout) to[R, l_=6.8\,k$\Omega$] (7.4,-2.0) coordinate (imid);
+  \draw (imid) to[R, l=10\,k$\Omega$] ++(0,-1.6) node[ground]{};
+  \draw (imid) to[zzD, l_=3.3\,V, mirror] ++(0,1.6) node[vcc, above]{3.3\,V};
+  \draw (imid) -- (imid -| mcu.west) -- (pin1);
+
+  % ===================== UART -> ESP-01 + supply ======================
+  \node[block, right=14mm of mcu, minimum height=18mm] (esp)
+        {ESP-01\\ESP8266\\Wi-Fi};
+  \draw (mcu.east) -- (esp.west) node[above, midway]{UART1};
+
+  \node[block, below=10mm of esp, minimum height=12mm] (reg)
+        {AMS1117-3.3\\+ 470\,$\mu$F};
+  \draw (reg.north) -- (esp.south) node[midway, right, font=\scriptsize]{3.3\,V};
+
+  \draw[-latex, thick] (esp.east) -- ++(1.6,0)
+        node[right, align=left]{MQTT broker\\ $\to$ pipeline / LSTM};
+
+\end{circuitikz}
+\end{document}
