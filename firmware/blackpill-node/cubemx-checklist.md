@@ -64,10 +64,10 @@ from the `.ioc` never clobbers application logic.
 - Build → produces `blackpill-node.elf`.
 - Flash via ST-Link (SWD: PA13/PA14) or DFU (BOOT0 jumper + USB).
 
-## 9. Bring-up order (see PLAN.md §7)
+## 9. Bring-up order (see hardware-build.md §7)
 
 1. LED blink + `esp01_publish` a status line, watch it on a USB-UART.
 2. Feed a **6–12 V AC adapter** through the front-end; dump raw ADC to confirm
    clean sines before trusting RMS.
 3. Verify `metrology_compute` output against a multimeter; tune `config.h`.
-4. Only then move to 220 V (enclosed, MCB/RCD — see PLAN.md §6).
+4. Only then move to 220 V (enclosed, MCB/RCD — see hardware-build.md §6).

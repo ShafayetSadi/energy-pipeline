@@ -61,7 +61,7 @@ the **STM32/ARM Cortex-M VSM** models.
      as the voltage source; for a lagging load, add a phase (e.g. 60° → PF 0.5).
      Set **offset 1.65 V, amplitude** per your ACS712 divider (e.g. 0.5–1.0 V).
    - Keep both offsets/amplitudes so the pin stays within **0–3.3 V** — this also
-     visually confirms the front-end scaling from `PLAN.md §3`.
+     visually confirms the front-end scaling from `firmware/hardware-build.md §3`.
 4. **Match calibration to the injected signal.** The `CAL_V_SCALE` / `CAL_I_SCALE`
    in `config.h` were chosen for the real sensors. For the sim, either:
    - set the generator amplitudes to what the real sensors would output (so the
@@ -101,7 +101,7 @@ For a thesis figure and a 3.3 V-safety check, model one channel:
 `sensor source → resistor divider → RC anti-alias → ADC node`, and confirm the
 node stays within 0–3.3 V at maximum mains. Falstad (browser,
 <https://www.falstad.com/circuit/>) is quickest for a clean diagram; LTspice for
-a more rigorous DC/AC sweep. Verify the **ACS712 ~0.65× divider** (`PLAN.md §3`)
+a more rigorous DC/AC sweep. Verify the **ACS712 ~0.65× divider** (`firmware/hardware-build.md §3`)
 never lets the pin exceed 3.3 V at 5 A.
 
 ### Cloud pipeline (no hardware)

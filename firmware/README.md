@@ -10,7 +10,7 @@ TimescaleDB → Grafana → LSTM), so the cloud side is unchanged.
   SCT-013-000 clamp (backup)
 - **Uplink:** ESP-01 (ESP8266) as a UART→MQTT bridge
 
-> See **[PLAN.md](PLAN.md)** for the full build plan, wiring, calibration and
+> See **[hardware-build.md](hardware-build.md)** for the full build plan, wiring, calibration and
 > mains-safety procedure. **Validate on a 6–12 V AC adapter before touching
 > 220 V.**
 
@@ -18,7 +18,7 @@ TimescaleDB → Grafana → LSTM), so the cloud side is unchanged.
 
 ```text
 firmware/
-  PLAN.md                full build plan (BOM, front-end, safety, milestones)
+  hardware-build.md      full build plan (BOM, front-end, safety, milestones)
   README.md              this file
   blackpill-node/
     cubemx-checklist.md  STM32CubeIDE (F411) project setup
@@ -51,7 +51,7 @@ synthesized resistive and 60°-lagging waveforms.
 3. Flash `blackpill-node/esp01/mqtt_bridge.ino` to the ESP-01 (edit Wi-Fi /
    broker at the top).
 4. Bring up in order (LED/UART → low-voltage AC → calibrate → 220 V) as in
-   **PLAN.md §7**.
+   **hardware-build.md §7**.
 
 ## Simulation
 

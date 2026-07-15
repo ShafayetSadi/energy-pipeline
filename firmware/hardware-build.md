@@ -17,20 +17,34 @@ cloud side (Mosquitto → gateway → TimescaleDB → Grafana → LSTM) is uncha
 
 ## 1. Architecture
 
-```text
-   220V AC mains
-        │
-   ┌────┴─────┐
-   │          │  ZMPT101B (isolated, 3.3V) ──► ADC ch A (PA0) ─┐
- [Load] ── ACS712-5A (inline) ──► ÷divider ──► ADC ch B (PA1) ─┤  STM32F411
-   │  (SCT-013 clamp = backup, same pin)                        │  TIM→ADC→DMA
-   │                                                            │  RMS / P / PF
-   │                                          UART1 (PA9/PA10) ─┘  (FPU)
-   │                                                │
-   │                                             ESP-01 (ESP8266)
-   │                                                │ Wi-Fi
-   │                                                ▼
-   │                                          MQTT broker ──► pipeline / LSTM
+```mermaid
+flowchart TD
+    MAINS["220 V AC mains"]
+    LOAD["Load"]
+
+    subgraph SENSE["Analog front-end (isolated)"]
+        ZMPT["ZMPT101B<br/>voltage, 3.3 V"]
+        ACS["ACS712-5A, inline<br/>SCT-013 clamp = backup"]
+        DIV["divider + 3.3 V clamp"]
+    end
+
+    subgraph STM["STM32F411 Black Pill"]
+        ADC["ADC ch A PA0 / ch B PA1<br/>TIM to ADC to DMA"]
+        MET["Metrology, FPU<br/>RMS, P, PF"]
+        UART["UART1 PA9/PA10<br/>newline JSON"]
+    end
+
+    ESP["ESP-01, ESP8266<br/>dumb Wi-Fi modem"]
+    BROKER["MQTT broker"]
+    PIPE["pipeline / LSTM"]
+
+    MAINS --> LOAD
+    MAINS --> ZMPT
+    LOAD --> ACS
+    ZMPT --> ADC
+    ACS --> DIV --> ADC
+    ADC --> MET --> UART --> ESP
+    ESP -->|Wi-Fi| BROKER --> PIPE
 ```
 
 **Division of labor:** STM32 does _all_ metrology (sampling + math). The ESP-01
@@ -123,7 +137,7 @@ on the host (`test/`) — cite that in the thesis.
 
 ```text
 firmware/
-  PLAN.md                this file
+  hardware-build.md      this file
   README.md              quick-start + workflow
   blackpill-node/
     cubemx-checklist.md  STM32CubeIDE (F411) project configuration
